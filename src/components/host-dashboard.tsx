@@ -7,6 +7,7 @@ import {
   ImageIcon,
   Lock,
   Play,
+  PlusCircle,
   RefreshCw,
   Sparkles,
   Trophy,
@@ -14,6 +15,7 @@ import {
   Users,
   Vote
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { DragonMark } from "@/components/dragon-mark";
 import { StatusPill } from "@/components/status-pill";
@@ -23,9 +25,20 @@ import { useGameState } from "@/hooks/use-game-state";
 import { requestJson } from "@/lib/client/api";
 import { hostTokenKey } from "@/lib/client/storage";
 import { formatScore, titleForScoringMode } from "@/lib/utils";
-import type { ScoringMode } from "@/lib/types";
+import type { GameSession, ScoringMode } from "@/lib/types";
+
+type NewGameResponse = {
+  session: GameSession;
+  hostToken: string;
+  archive: {
+    keptImageCount: number;
+    cleanedImageCount: number;
+    removedStorageObjectCount: number;
+  };
+};
 
 export function HostDashboard({ joinCode }: { joinCode: string }) {
+  const router = useRouter();
   const [hostToken, setHostToken] = useState<string | null>(null);
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -151,6 +164,23 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
     if (result) {
       setNextInstruction("");
       setMessage("Round advanced.");
+    }
+  }
+
+  async function archiveAndStartNewGame() {
+    if (!hostToken) return;
+    const path = `/api/games/${joinCode}/host/new-game`;
+    setBusy(path);
+    setError(null);
+    setMessage(null);
+    try {
+      const data = await requestJson<NewGameResponse>(path, { hostToken });
+      window.localStorage.setItem(hostTokenKey(data.session.join_code), data.hostToken);
+      router.push(`/host/${data.session.join_code}`);
+    } catch (archiveError) {
+      setError(archiveError instanceof Error ? archiveError.message : "Could not create new game");
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -501,14 +531,42 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                     (label, index) => {
                       const ranking = currentRankings[index];
                       const player = state.players.find((item) => item.id === ranking?.player_id);
+                      const image = currentImages.find(
+                        (item) =>
+                          item.round_id === currentRound?.id &&
+                          item.player_id === ranking?.player_id &&
+                          item.image_url
+                      );
                       return (
-                        <div key={label} className="rounded-lg border border-amber-300/25 bg-amber-300/10 p-4">
-                          <p className="text-xs font-black uppercase text-amber-200">{label}</p>
-                          <p className="mt-1 text-2xl font-black">{player?.name ?? "TBD"}</p>
+                        <div
+                          key={label}
+                          className="overflow-hidden rounded-lg border border-amber-300/25 bg-amber-300/10"
+                        >
+                          {image?.image_url ? (
+                            <img
+                              src={image.image_url}
+                              alt={player?.name ?? label}
+                              className="aspect-square w-full object-cover"
+                            />
+                          ) : null}
+                          <div className="p-4">
+                            <p className="text-xs font-black uppercase text-amber-200">{label}</p>
+                            <p className="mt-1 text-2xl font-black">{player?.name ?? "TBD"}</p>
+                          </div>
                         </div>
                       );
                     }
                   )}
+                </div>
+                <div className="mt-5 flex justify-end border-t border-amber-300/20 pt-5">
+                  <Button
+                    icon={<PlusCircle className="h-4 w-4" />}
+                    variant="secondary"
+                    loading={busy === `/api/games/${joinCode}/host/new-game`}
+                    onClick={() => void archiveAndStartNewGame()}
+                  >
+                    Archive & New Game
+                  </Button>
                 </div>
               </section>
             ) : null}

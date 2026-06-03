@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { createJoinCode, createToken, hashSecret, verifySecret } from "@/lib/crypto";
+import { partitionImagesForArchive, topRankedPlayerIds } from "@/lib/game/archive";
 import { buildStudentImagePrompt, cleanPrompt, combinePromptChain } from "@/lib/game/prompts";
 import { advancingCount, computeRankings, nextRoundCutLine } from "@/lib/game/ranking";
 import { AppError } from "@/lib/http";
 import { generateChallengeImage, generateStudentImage, scoreImageSimilarity } from "@/lib/ai/openai";
 import { broadcastGameUpdate } from "@/lib/realtime";
+import { removeStoredImages } from "@/lib/storage";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type {
   GameSession,
@@ -198,42 +200,58 @@ async function getCurrentRound(session: InternalSession) {
   return (data as Round | null) ?? null;
 }
 
-export async function createGame(input: z.infer<typeof createGameSchema>) {
+async function createGameSession(input: {
+  hostPinHash: string;
+  scoringMode?: ScoringMode;
+  voteWeight?: number;
+}) {
   const supabase = getSupabaseAdmin();
   const hostToken = createToken();
-  let joinCode = createJoinCode();
 
-  for (let attempts = 0; attempts < 5; attempts += 1) {
-    const { data: existing, error } = await supabase
+  for (let attempts = 0; attempts < 8; attempts += 1) {
+    const joinCode = createJoinCode();
+    const { data: existing, error: existingError } = await supabase
       .from("game_sessions")
       .select("id")
       .eq("join_code", joinCode)
       .maybeSingle();
+    if (existingError) {
+      throw existingError;
+    }
+    if (existing) {
+      continue;
+    }
+
+    const { data, error } = await supabase
+      .from("game_sessions")
+      .insert({
+        join_code: joinCode,
+        host_pin_hash: input.hostPinHash,
+        host_token_hash: hashSecret(hostToken),
+        scoring_mode: input.scoringMode ?? "voting_first",
+        vote_weight: input.voteWeight ?? 0.5
+      })
+      .select("*")
+      .single();
+
     if (error) {
       throw error;
     }
-    if (!existing) {
-      break;
-    }
-    joinCode = createJoinCode();
+
+    return {
+      session: coerceSession(data),
+      hostToken
+    };
   }
 
-  const { data, error } = await supabase
-    .from("game_sessions")
-    .insert({
-      join_code: joinCode,
-      host_pin_hash: hashSecret(input.pin),
-      host_token_hash: hashSecret(hostToken)
-    })
-    .select("*")
-    .single();
+  throw new AppError("Could not create a unique join code. Try again.", 500);
+}
 
-  if (error) {
-    throw error;
-  }
-
-  const session = coerceSession(data);
-  await broadcastGameUpdate(joinCode, "game-created", { joinCode });
+export async function createGame(input: z.infer<typeof createGameSchema>) {
+  const { session, hostToken } = await createGameSession({
+    hostPinHash: hashSecret(input.pin)
+  });
+  await broadcastGameUpdate(session.join_code, "game-created", { joinCode: session.join_code });
 
   return {
     session: publicSession(session),
@@ -452,6 +470,10 @@ export async function applyHostAction(
   const round = await getCurrentRound(session);
 
   if (input.action === "end_game") {
+    if (round) {
+      await recomputeRankings(joinCode, { hostToken: input.hostToken });
+    }
+
     const { error } = await supabase
       .from("game_sessions")
       .update({ status: "ended" })
@@ -924,6 +946,91 @@ export async function recomputeRankings(
   });
 
   return { rankings };
+}
+
+async function cleanupGameImagesForArchive(input: {
+  session: InternalSession;
+  finalRound: Round;
+  rankings: ReturnType<typeof computeRankings>;
+}) {
+  const supabase = getSupabaseAdmin();
+  const { data: images, error } = await supabase
+    .from("generated_images")
+    .select("*")
+    .eq("game_session_id", input.session.id);
+  if (error) {
+    throw error;
+  }
+
+  const archivePlan = partitionImagesForArchive({
+    images: coerceImages((images ?? []) as Record<string, unknown>[]),
+    finalRoundId: input.finalRound.id,
+    finalistPlayerIds: topRankedPlayerIds(input.rankings)
+  });
+  const removedStorage = await removeStoredImages(archivePlan.cleanupStoragePaths);
+
+  if (archivePlan.cleanupImageIds.length) {
+    const { error: updateError } = await supabase
+      .from("generated_images")
+      .update({
+        image_url: null,
+        image_storage_path: null,
+        generation_error: "Image file removed after game archive; ranking data preserved."
+      })
+      .in("id", archivePlan.cleanupImageIds);
+    if (updateError) {
+      throw updateError;
+    }
+  }
+
+  return {
+    keptImageCount: archivePlan.keptImageIds.length,
+    cleanedImageCount: archivePlan.cleanupImageIds.length,
+    removedStorageObjectCount: removedStorage.removed
+  };
+}
+
+export async function archiveAndCreateNewGame(
+  joinCode: string,
+  input: z.infer<typeof hostAuthSchema>
+) {
+  const session = await requireHost(joinCode, input.hostToken);
+  if (session.status !== "ended") {
+    throw new AppError("End the current game before archiving it and creating a new one.", 409);
+  }
+
+  const finalRound = await getCurrentRound(session);
+  let archive = {
+    keptImageCount: 0,
+    cleanedImageCount: 0,
+    removedStorageObjectCount: 0
+  };
+
+  if (finalRound) {
+    const { rankings } = await recomputeRankings(joinCode, input);
+    archive = await cleanupGameImagesForArchive({
+      session,
+      finalRound,
+      rankings
+    });
+  }
+
+  const created = await createGameSession({
+    hostPinHash: session.host_pin_hash,
+    scoringMode: session.scoring_mode,
+    voteWeight: session.vote_weight
+  });
+
+  await broadcastGameUpdate(session.join_code, "game-archived", archive);
+  await broadcastGameUpdate(created.session.join_code, "game-created", {
+    joinCode: created.session.join_code
+  });
+
+  return {
+    session: publicSession(created.session),
+    hostToken: created.hostToken,
+    archive
+  };
 }
 
 export async function advanceRound(joinCode: string, input: z.infer<typeof advanceRoundSchema>) {

@@ -61,3 +61,18 @@ export async function uploadDataUrl(input: {
     contentType: match[1]
   });
 }
+
+export async function removeStoredImages(paths: string[]) {
+  const uniquePaths = [...new Set(paths.filter(Boolean))];
+  if (!uniquePaths.length || !hasSupabaseServerConfig()) {
+    return { removed: 0 };
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { error } = await supabase.storage.from(getImageBucket()).remove(uniquePaths);
+  if (error) {
+    throw error;
+  }
+
+  return { removed: uniquePaths.length };
+}
