@@ -28,5 +28,6 @@ npm run dev
 - Student image generation first uses `OPENAI_PROMPT_MODEL`, defaulting to `gpt-5.4-mini`, as a prompt companion that merges the base challenge, host round instruction, and student's locked prompt chain before calling the Images API.
 - Vision scoring uses `OPENAI_EVAL_MODEL`, defaulting to `gpt-5.4-mini`, and `OPENAI_VISION_DETAIL=low` to reduce image-token cost.
 - After a game ends, the host can use `Archive & New Game` to preserve rankings and final top-four images while removing the other generated image files from Supabase Storage.
+- If a live game gets messed up, the host can use `Renew Game` to discard the current game entirely, remove its stored images, and start over with a new join code.
 - If OpenAI or Supabase image storage is not configured, the app uses a deterministic development fallback so the UI can still be explored without spending API credits.
 - Supabase browser auth accepts `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; legacy projects can use `NEXT_PUBLIC_SUPABASE_ANON_KEY`.

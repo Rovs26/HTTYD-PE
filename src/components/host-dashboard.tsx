@@ -37,6 +37,14 @@ type NewGameResponse = {
   };
 };
 
+type RenewGameResponse = {
+  session: GameSession;
+  hostToken: string;
+  cleanup: {
+    removedStorageObjectCount: number;
+  };
+};
+
 export function HostDashboard({ joinCode }: { joinCode: string }) {
   const router = useRouter();
   const [hostToken, setHostToken] = useState<string | null>(null);
@@ -179,6 +187,28 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
       router.push(`/host/${data.session.join_code}`);
     } catch (archiveError) {
       setError(archiveError instanceof Error ? archiveError.message : "Could not create new game");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function renewGame() {
+    if (!hostToken) return;
+    const confirmed = window.confirm(
+      "Renew this game from scratch? This deletes the current game, players, prompts, votes, rankings, and all stored images."
+    );
+    if (!confirmed) return;
+
+    const path = `/api/games/${joinCode}/host/renew`;
+    setBusy(path);
+    setError(null);
+    setMessage(null);
+    try {
+      const data = await requestJson<RenewGameResponse>(path, { hostToken });
+      window.localStorage.setItem(hostTokenKey(data.session.join_code), data.hostToken);
+      router.push(`/host/${data.session.join_code}`);
+    } catch (renewError) {
+      setError(renewError instanceof Error ? renewError.message : "Could not renew game");
     } finally {
       setBusy(null);
     }
@@ -339,6 +369,14 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                     onClick={() => void post(`/api/games/${joinCode}/host/start`)}
                   >
                     Start Game
+                  </Button>
+                  <Button
+                    icon={<RefreshCw className="h-4 w-4" />}
+                    variant="danger"
+                    loading={busy === `/api/games/${joinCode}/host/renew`}
+                    onClick={() => void renewGame()}
+                  >
+                    Renew Game
                   </Button>
                   <div className="grid grid-cols-2 gap-2">
                     <Button

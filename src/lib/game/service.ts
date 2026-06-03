@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { createJoinCode, createToken, hashSecret, verifySecret } from "@/lib/crypto";
-import { partitionImagesForArchive, topRankedPlayerIds } from "@/lib/game/archive";
+import {
+  partitionImagesForArchive,
+  storagePathsForGameRenewal,
+  topRankedPlayerIds
+} from "@/lib/game/archive";
 import { buildStudentImagePrompt, cleanPrompt, combinePromptChain } from "@/lib/game/prompts";
 import { advancingCount, computeRankings, nextRoundCutLine } from "@/lib/game/ranking";
 import { AppError } from "@/lib/http";
@@ -1031,6 +1035,70 @@ export async function archiveAndCreateNewGame(
     hostToken: created.hostToken,
     archive
   };
+}
+
+async function cleanupGameStorageForRenewal(sessionId: string) {
+  const supabase = getSupabaseAdmin();
+  const [
+    { data: rounds, error: roundsError },
+    { data: images, error: imagesError }
+  ] = await Promise.all([
+    supabase
+      .from("rounds")
+      .select("challenge_image_storage_path")
+      .eq("game_session_id", sessionId),
+    supabase
+      .from("generated_images")
+      .select("image_storage_path")
+      .eq("game_session_id", sessionId)
+  ]);
+
+  const error = roundsError || imagesError;
+  if (error) {
+    throw error;
+  }
+
+  const paths = storagePathsForGameRenewal({
+    rounds: (rounds ?? []) as Pick<Round, "challenge_image_storage_path">[],
+    images: (images ?? []) as Pick<GeneratedImage, "image_storage_path">[]
+  });
+  const removedStorage = await removeStoredImages(paths);
+
+  return {
+    removedStorageObjectCount: removedStorage.removed
+  };
+}
+
+export async function renewGame(joinCode: string, input: z.infer<typeof hostAuthSchema>) {
+  const supabase = getSupabaseAdmin();
+  const session = await requireHost(joinCode, input.hostToken);
+  const created = await createGameSession({
+    hostPinHash: session.host_pin_hash,
+    scoringMode: session.scoring_mode,
+    voteWeight: session.vote_weight
+  });
+
+  try {
+    const cleanup = await cleanupGameStorageForRenewal(session.id);
+    const { error } = await supabase.from("game_sessions").delete().eq("id", session.id);
+    if (error) {
+      throw error;
+    }
+
+    await broadcastGameUpdate(session.join_code, "game-renewed", cleanup);
+    await broadcastGameUpdate(created.session.join_code, "game-created", {
+      joinCode: created.session.join_code
+    });
+
+    return {
+      session: publicSession(created.session),
+      hostToken: created.hostToken,
+      cleanup
+    };
+  } catch (renewError) {
+    await supabase.from("game_sessions").delete().eq("id", created.session.id);
+    throw renewError;
+  }
 }
 
 export async function advanceRound(joinCode: string, input: z.infer<typeof advanceRoundSchema>) {

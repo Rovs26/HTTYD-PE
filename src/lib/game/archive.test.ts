@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { partitionImagesForArchive, topRankedPlayerIds } from "@/lib/game/archive";
+import {
+  partitionImagesForArchive,
+  storagePathsForGameRenewal,
+  topRankedPlayerIds
+} from "@/lib/game/archive";
 import type { ComputedRanking } from "@/lib/game/ranking";
 import type { GeneratedImage } from "@/lib/types";
 
@@ -64,5 +68,26 @@ describe("game archive helpers", () => {
     expect(result.keptImageIds).toEqual(["round3-a", "round3-b"]);
     expect(result.cleanupImageIds).toEqual(["round1-a", "round3-e"]);
     expect(result.cleanupStoragePaths).toEqual(["round1-a.png", "round3-e.png"]);
+  });
+
+  it("collects every unique stored image path when renewing a broken game", () => {
+    const paths = storagePathsForGameRenewal({
+      rounds: [
+        { challenge_image_storage_path: "game/challenge.png" },
+        { challenge_image_storage_path: "game/challenge.png" },
+        { challenge_image_storage_path: null }
+      ],
+      images: [
+        { image_storage_path: "game/round-1/a.png" },
+        { image_storage_path: "game/round-1/b.png" },
+        { image_storage_path: null }
+      ]
+    });
+
+    expect(paths).toEqual([
+      "game/challenge.png",
+      "game/round-1/a.png",
+      "game/round-1/b.png"
+    ]);
   });
 });

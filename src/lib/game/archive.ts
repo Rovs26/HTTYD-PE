@@ -1,4 +1,4 @@
-import type { GeneratedImage } from "@/lib/types";
+import type { GeneratedImage, Round } from "@/lib/types";
 import type { ComputedRanking } from "@/lib/game/ranking";
 
 export function topRankedPlayerIds(rankings: ComputedRanking[], limit = 4) {
@@ -37,4 +37,18 @@ export function partitionImagesForArchive(input: {
     cleanupImageIds: cleanupImages.map((image) => image.id),
     cleanupStoragePaths
   };
+}
+
+export function storagePathsForGameRenewal(input: {
+  rounds: Pick<Round, "challenge_image_storage_path">[];
+  images: Pick<GeneratedImage, "image_storage_path">[];
+}) {
+  return [
+    ...new Set(
+      [
+        ...input.rounds.map((round) => round.challenge_image_storage_path),
+        ...input.images.map((image) => image.image_storage_path)
+      ].filter((path): path is string => Boolean(path))
+    )
+  ];
 }
