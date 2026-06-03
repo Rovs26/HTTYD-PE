@@ -26,3 +26,4 @@ npm run dev
 - Real image generation uses `OPENAI_IMAGE_MODEL`, defaulting to `gpt-image-2`.
 - Vision scoring uses `OPENAI_EVAL_MODEL`, defaulting to `gpt-5.5`.
 - If OpenAI or Supabase image storage is not configured, the app uses a deterministic development fallback so the UI can still be explored without spending API credits.
+- Supabase browser auth accepts `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; legacy projects can use `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
