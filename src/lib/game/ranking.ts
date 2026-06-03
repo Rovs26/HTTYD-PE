@@ -114,3 +114,11 @@ export function nextRoundCutLine(roundNumber: number) {
   }
   return 0;
 }
+
+export function advancingCount(roundNumber: number, rankedPlayerCount: number) {
+  const cutLine = nextRoundCutLine(roundNumber);
+  if (!cutLine) {
+    return 0;
+  }
+  return Math.min(cutLine, rankedPlayerCount);
+}

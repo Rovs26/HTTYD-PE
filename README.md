@@ -24,6 +24,7 @@ npm run dev
 ## Notes
 
 - Real image generation uses `OPENAI_IMAGE_MODEL`, defaulting to `gpt-image-2`.
-- Vision scoring uses `OPENAI_EVAL_MODEL`, defaulting to `gpt-5.5`.
+- Image generation defaults to `OPENAI_IMAGE_SIZE=768x768`, `OPENAI_CHALLENGE_IMAGE_QUALITY=medium`, and `OPENAI_STUDENT_IMAGE_QUALITY=low` for faster classroom rounds.
+- Vision scoring uses `OPENAI_EVAL_MODEL`, defaulting to `gpt-5.4-mini`, and `OPENAI_VISION_DETAIL=low` to reduce image-token cost.
 - If OpenAI or Supabase image storage is not configured, the app uses a deterministic development fallback so the UI can still be explored without spending API credits.
 - Supabase browser auth accepts `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; legacy projects can use `NEXT_PUBLIC_SUPABASE_ANON_KEY`.

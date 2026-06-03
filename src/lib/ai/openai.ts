@@ -22,8 +22,43 @@ function imageModel() {
   return process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-2";
 }
 
+function imageSize() {
+  return process.env.OPENAI_IMAGE_SIZE ?? "768x768";
+}
+
+type ImageQuality = "standard" | "hd" | "low" | "medium" | "high" | "auto";
+
+function imageQuality(value: string | undefined, fallback: ImageQuality): ImageQuality {
+  if (value === "low" || value === "medium") {
+    return value;
+  }
+  return fallback;
+}
+
+function challengeImageQuality() {
+  return imageQuality(
+    process.env.OPENAI_CHALLENGE_IMAGE_QUALITY ?? process.env.OPENAI_IMAGE_QUALITY,
+    "medium"
+  );
+}
+
+function studentImageQuality() {
+  return imageQuality(
+    process.env.OPENAI_STUDENT_IMAGE_QUALITY ?? process.env.OPENAI_IMAGE_QUALITY,
+    "low"
+  );
+}
+
 function evalModel() {
-  return process.env.OPENAI_EVAL_MODEL ?? "gpt-5.5";
+  return process.env.OPENAI_EVAL_MODEL ?? "gpt-5.4-mini";
+}
+
+function visionDetail(): "low" | "high" | "auto" {
+  const value = process.env.OPENAI_VISION_DETAIL;
+  if (value === "high" || value === "auto") {
+    return value;
+  }
+  return "low";
 }
 
 export async function generateChallengeImage(gameId: string) {
@@ -40,7 +75,8 @@ export async function generateChallengeImage(gameId: string) {
   const result = await client.images.generate({
     model: imageModel(),
     prompt,
-    size: "1024x1024"
+    size: imageSize(),
+    quality: challengeImageQuality()
   });
   const base64 = result.data?.[0]?.b64_json;
   if (!base64) {
@@ -90,7 +126,8 @@ export async function generateStudentImage(input: {
   const result = await client.images.generate({
     model: imageModel(),
     prompt: input.prompt,
-    size: "1024x1024"
+    size: imageSize(),
+    quality: studentImageQuality()
   });
   const base64 = result.data?.[0]?.b64_json;
   if (!base64) {
@@ -138,8 +175,8 @@ export async function scoreImageSimilarity(input: {
               "Reward visual similarity, dragon features, scene, mood, composition, and prompt faithfulness."
             ].join(" ")
           },
-          { type: "input_image", image_url: input.challengeImageUrl, detail: "high" },
-          { type: "input_image", image_url: input.generatedImageUrl, detail: "high" }
+          { type: "input_image", image_url: input.challengeImageUrl, detail: visionDetail() },
+          { type: "input_image", image_url: input.generatedImageUrl, detail: visionDetail() }
         ]
       }
     ],

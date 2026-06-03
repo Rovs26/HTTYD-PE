@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeRankings, nextRoundCutLine } from "@/lib/game/ranking";
+import { advancingCount, computeRankings, nextRoundCutLine } from "@/lib/game/ranking";
 import type { GeneratedImage, Player, PromptSubmission, Vote } from "@/lib/types";
 
 function player(id: string, name = id): Player {
@@ -101,5 +101,12 @@ describe("ranking", () => {
     expect(nextRoundCutLine(1)).toBe(10);
     expect(nextRoundCutLine(2)).toBe(4);
     expect(nextRoundCutLine(3)).toBe(0);
+  });
+
+  it("advances every ranked player when the class is smaller than the cut line", () => {
+    expect(advancingCount(1, 3)).toBe(3);
+    expect(advancingCount(1, 10)).toBe(10);
+    expect(advancingCount(1, 12)).toBe(10);
+    expect(advancingCount(2, 2)).toBe(2);
   });
 });

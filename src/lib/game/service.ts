@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createJoinCode, createToken, hashSecret, verifySecret } from "@/lib/crypto";
 import { cleanPrompt, combinePromptChain } from "@/lib/game/prompts";
-import { computeRankings, nextRoundCutLine } from "@/lib/game/ranking";
+import { advancingCount, computeRankings, nextRoundCutLine } from "@/lib/game/ranking";
 import { AppError } from "@/lib/http";
 import { generateChallengeImage, generateStudentImage, scoreImageSimilarity } from "@/lib/ai/openai";
 import { broadcastGameUpdate } from "@/lib/realtime";
@@ -72,7 +72,12 @@ export const scoringSchema = hostAuthSchema.extend({
 });
 
 export const advanceRoundSchema = hostAuthSchema.extend({
-  additionalInstruction: z.string().trim().min(4).max(1000).optional()
+  additionalInstruction: z
+    .string()
+    .trim()
+    .max(1000)
+    .optional()
+    .transform((value) => (value ? value : undefined))
 });
 
 function normalizeJoinCode(joinCode: string) {
@@ -929,12 +934,17 @@ export async function advanceRound(joinCode: string, input: z.infer<typeof advan
     return { ended: true };
   }
 
-  if (!input.additionalInstruction) {
-    throw new AppError("Add the next challenge instruction before advancing.", 422);
-  }
+  const additionalInstruction =
+    input.additionalInstruction ??
+    (round.round_number === 1
+      ? "Improve your previous dragon prompt with stronger visual detail, clearer style, and a more cinematic scene."
+      : "Make your final dragon image more polished, dramatic, and faithful to the original challenge.");
 
   const { rankings } = await recomputeRankings(joinCode, { hostToken: input.hostToken });
-  const advancingIds = new Set(rankings.slice(0, cutLine).map((ranking) => ranking.player_id));
+  const countToAdvance = advancingCount(round.round_number, rankings.length);
+  const advancingIds = new Set(
+    rankings.slice(0, countToAdvance).map((ranking) => ranking.player_id)
+  );
   if (!advancingIds.size) {
     throw new AppError("No ranked players are available to advance.", 409);
   }
@@ -969,7 +979,7 @@ export async function advanceRound(joinCode: string, input: z.infer<typeof advan
       challenge_image_url: round.challenge_image_url,
       challenge_image_storage_path: round.challenge_image_storage_path,
       base_prompt: round.base_prompt,
-      additional_instruction: input.additionalInstruction,
+      additional_instruction: additionalInstruction,
       status: "setup"
     })
     .select("*")
