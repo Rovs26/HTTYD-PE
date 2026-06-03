@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createJoinCode, createToken, hashSecret, verifySecret } from "@/lib/crypto";
-import { cleanPrompt, combinePromptChain } from "@/lib/game/prompts";
+import { buildStudentImagePrompt, cleanPrompt, combinePromptChain } from "@/lib/game/prompts";
 import { advancingCount, computeRankings, nextRoundCutLine } from "@/lib/game/ranking";
 import { AppError } from "@/lib/http";
 import { generateChallengeImage, generateStudentImage, scoreImageSimilarity } from "@/lib/ai/openai";
@@ -666,7 +666,9 @@ export async function generateNextImage(joinCode: string, input: z.infer<typeof 
       roundNumber: round.round_number,
       playerName: player.name,
       playerId: player.id,
-      prompt: submission.combined_prompt
+      prompt: submission.combined_prompt,
+      basePrompt: round.base_prompt,
+      additionalInstruction: round.additional_instruction
     });
 
     const { data: updated, error: updateError } = await supabase
@@ -743,8 +745,12 @@ export async function scoreNextImage(joinCode: string, input: z.infer<typeof hos
     if (!image.image_url) {
       throw new Error("Generated image is missing a URL.");
     }
-    const prompt =
-      (image.prompt_submissions as { combined_prompt?: string } | null)?.combined_prompt ?? "";
+    const prompt = buildStudentImagePrompt({
+      basePrompt: round.base_prompt,
+      additionalInstruction: round.additional_instruction,
+      studentPrompt:
+        (image.prompt_submissions as { combined_prompt?: string } | null)?.combined_prompt ?? ""
+    });
     const scored = await scoreImageSimilarity({
       challengeImageUrl: round.challenge_image_url,
       generatedImageUrl: image.image_url,

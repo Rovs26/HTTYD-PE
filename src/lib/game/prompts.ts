@@ -20,6 +20,35 @@ export function combinePromptChain(
   return [...previous, cleaned].join("\n\nThen apply this additional instruction:\n");
 }
 
+export function buildStudentImagePrompt(input: {
+  basePrompt: string;
+  studentPrompt: string;
+  additionalInstruction?: string | null;
+}) {
+  const basePrompt = cleanPrompt(input.basePrompt);
+  const studentPrompt = cleanPrompt(input.studentPrompt);
+  const additionalInstruction = input.additionalInstruction
+    ? cleanPrompt(input.additionalInstruction)
+    : "";
+
+  const sections = [
+    "Create one cohesive fantasy dragon image.",
+    "Preserve the original challenge dragon, scene, lighting, mood, and composition unless the round instruction clearly changes them.",
+    `Original challenge brief:\n${basePrompt}`
+  ];
+
+  if (additionalInstruction) {
+    sections.push(`Host instruction for this round:\n${additionalInstruction}`);
+  }
+
+  sections.push(
+    `Student locked prompt chain:\n${studentPrompt}`,
+    "Render a single polished cinematic image with no visible text, labels, watermarks, UI, or split panels."
+  );
+
+  return sections.join("\n\n");
+}
+
 export function buildBaseDragonPrompt() {
   return [
     "A cinematic, original fantasy dragon portrait for a classroom prompt engineering challenge.",

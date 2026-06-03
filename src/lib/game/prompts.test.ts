@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanPrompt, combinePromptChain } from "@/lib/game/prompts";
+import { buildStudentImagePrompt, cleanPrompt, combinePromptChain } from "@/lib/game/prompts";
 import type { PromptSubmission } from "@/lib/types";
 
 function submission(partial: Partial<PromptSubmission>): PromptSubmission {
@@ -39,5 +39,31 @@ describe("prompt helpers", () => {
     expect(combined).toContain("A friendly black dragon in a cove");
     expect(combined).toContain("Add glowing blue eyes");
     expect(combined).toContain("Make it more cinematic");
+  });
+
+  it("builds image generation context from the challenge, host instruction, and student chain", () => {
+    const prompt = buildStudentImagePrompt({
+      basePrompt: "Original dragon in a Nordic cove",
+      additionalInstruction: "Make the dragon fly and add other dragons in the sky",
+      studentPrompt: "Keep the golden torchlight and blue scale details"
+    });
+
+    expect(prompt).toContain("Original challenge brief:");
+    expect(prompt).toContain("Original dragon in a Nordic cove");
+    expect(prompt).toContain("Host instruction for this round:");
+    expect(prompt).toContain("Make the dragon fly and add other dragons in the sky");
+    expect(prompt).toContain("Student locked prompt chain:");
+    expect(prompt).toContain("Keep the golden torchlight and blue scale details");
+  });
+
+  it("omits the host instruction section when a round has no extra instruction", () => {
+    const prompt = buildStudentImagePrompt({
+      basePrompt: "Original dragon",
+      studentPrompt: "Add mist"
+    });
+
+    expect(prompt).not.toContain("Host instruction for this round:");
+    expect(prompt).toContain("Original dragon");
+    expect(prompt).toContain("Add mist");
   });
 });

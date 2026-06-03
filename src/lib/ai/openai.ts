@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { buildBaseDragonPrompt } from "@/lib/game/prompts";
+import { buildBaseDragonPrompt, buildStudentImagePrompt } from "@/lib/game/prompts";
 import { shouldUseMockAi } from "@/lib/config";
 import { mockGenerateChallenge, mockGenerateImage, mockScoreSimilarity } from "@/lib/ai/mock";
 import { uploadDataUrl, uploadImageBase64 } from "@/lib/storage";
@@ -53,6 +53,10 @@ function evalModel() {
   return process.env.OPENAI_EVAL_MODEL ?? "gpt-5.4-mini";
 }
 
+function promptModel() {
+  return process.env.OPENAI_PROMPT_MODEL ?? process.env.OPENAI_EVAL_MODEL ?? "gpt-5.4-mini";
+}
+
 function visionDetail(): "low" | "high" | "auto" {
   const value = process.env.OPENAI_VISION_DETAIL;
   if (value === "high" || value === "auto") {
@@ -96,15 +100,66 @@ export async function generateChallengeImage(gameId: string) {
   };
 }
 
+async function refineStudentImagePrompt(
+  client: OpenAI,
+  input: {
+    basePrompt: string;
+    studentPrompt: string;
+    additionalInstruction?: string | null;
+  }
+) {
+  const fallbackPrompt = buildStudentImagePrompt(input);
+
+  try {
+    const response = await client.responses.create({
+      model: promptModel(),
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: [
+                "You are the Dragon Prompt Companion for a live classroom game.",
+                "Rewrite the provided context into exactly one image-generation prompt.",
+                "Preserve the original challenge dragon and scene, then apply the host round instruction and the student's locked prompt chain.",
+                "Be concrete about subject, composition, action, lighting, setting, style, and visible details.",
+                "Do not mention the player, the classroom, scoring, voting, prompt engineering, instructions, markdown, or JSON.",
+                "Return only the final prompt text.",
+                "",
+                fallbackPrompt
+              ].join("\n")
+            }
+          ]
+        }
+      ],
+      max_output_tokens: 700
+    });
+
+    const refinedPrompt = response.output_text.trim();
+    return refinedPrompt || fallbackPrompt;
+  } catch {
+    return fallbackPrompt;
+  }
+}
+
 export async function generateStudentImage(input: {
   gameId: string;
   roundNumber: number;
   playerName: string;
   playerId: string;
   prompt: string;
+  basePrompt: string;
+  additionalInstruction?: string | null;
 }) {
+  const imagePrompt = buildStudentImagePrompt({
+    basePrompt: input.basePrompt,
+    studentPrompt: input.prompt,
+    additionalInstruction: input.additionalInstruction
+  });
+
   if (shouldUseMockAi()) {
-    const mock = await mockGenerateImage(input.prompt, input.playerName);
+    const mock = await mockGenerateImage(imagePrompt, input.playerName);
     if (mock.imageUrl.startsWith("data:")) {
       const stored = await uploadDataUrl({
         dataUrl: mock.imageUrl,
@@ -120,12 +175,18 @@ export async function generateStudentImage(input: {
 
   const client = getOpenAI();
   if (!client) {
-    return mockGenerateImage(input.prompt, input.playerName);
+    return mockGenerateImage(imagePrompt, input.playerName);
   }
+
+  const refinedPrompt = await refineStudentImagePrompt(client, {
+    basePrompt: input.basePrompt,
+    studentPrompt: input.prompt,
+    additionalInstruction: input.additionalInstruction
+  });
 
   const result = await client.images.generate({
     model: imageModel(),
-    prompt: input.prompt,
+    prompt: refinedPrompt,
     size: imageSize(),
     quality: studentImageQuality()
   });
@@ -172,7 +233,8 @@ export async function scoreImageSimilarity(input: {
               "Compare these two images for a classroom prompt engineering game.",
               "The first image is the original challenge dragon. The second image is a student's generated result.",
               "Return strict JSON with score from 0 to 100 and a short rationale.",
-              "Reward visual similarity, dragon features, scene, mood, composition, and prompt faithfulness."
+              "Reward visual similarity, dragon features, scene, mood, composition, and prompt faithfulness.",
+              input.prompt ? `Intended prompt context: ${input.prompt.slice(0, 3000)}` : ""
             ].join(" ")
           },
           { type: "input_image", image_url: input.challengeImageUrl, detail: visionDetail() },
