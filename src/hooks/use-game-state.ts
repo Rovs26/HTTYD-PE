@@ -13,6 +13,7 @@ export function useGameState(joinCode: string, auth: Auth) {
   const [state, setState] = useState<GameState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [removed, setRemoved] = useState(false);
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -22,11 +23,21 @@ export function useGameState(joinCode: string, auth: Auth) {
   }, [auth.hostToken, auth.playerToken]);
 
   const load = useCallback(async () => {
+    if (removed) {
+      return;
+    }
+
     try {
       const response = await fetch(`/api/games/${joinCode}${query ? `?${query}` : ""}`, {
         cache: "no-store"
       });
       const data = await response.json();
+      if (response.status === 404) {
+        setState(null);
+        setError("This game was removed or renewed. Use the newest host tab or create a new game.");
+        setRemoved(true);
+        return;
+      }
       if (!response.ok) {
         throw new Error(data.error ?? "Could not load game");
       }
@@ -37,15 +48,29 @@ export function useGameState(joinCode: string, auth: Auth) {
     } finally {
       setLoading(false);
     }
-  }, [joinCode, query]);
+  }, [joinCode, query, removed]);
+
+  useEffect(() => {
+    setState(null);
+    setError(null);
+    setLoading(true);
+    setRemoved(false);
+  }, [joinCode]);
 
   useEffect(() => {
     void load();
+    if (removed) {
+      return;
+    }
     const interval = window.setInterval(() => void load(), 2500);
     return () => window.clearInterval(interval);
-  }, [load]);
+  }, [load, removed]);
 
   useEffect(() => {
+    if (removed) {
+      return;
+    }
+
     const supabase = getSupabaseBrowser();
     if (!supabase) {
       return;
@@ -59,7 +84,7 @@ export function useGameState(joinCode: string, auth: Auth) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [joinCode, load]);
+  }, [joinCode, load, removed]);
 
   return { state, error, loading, reload: load };
 }

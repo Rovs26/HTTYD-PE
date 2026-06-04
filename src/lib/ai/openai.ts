@@ -75,29 +75,34 @@ export async function generateChallengeImage(gameId: string) {
     return mockGenerateChallenge();
   }
 
-  const prompt = buildBaseDragonPrompt();
-  const result = await client.images.generate({
-    model: imageModel(),
-    prompt,
-    size: imageSize(),
-    quality: challengeImageQuality()
-  });
-  const base64 = result.data?.[0]?.b64_json;
-  if (!base64) {
-    throw new Error("OpenAI did not return image data.");
+  try {
+    const prompt = buildBaseDragonPrompt();
+    const result = await client.images.generate({
+      model: imageModel(),
+      prompt,
+      size: imageSize(),
+      quality: challengeImageQuality()
+    });
+    const base64 = result.data?.[0]?.b64_json;
+    if (!base64) {
+      throw new Error("OpenAI did not return image data.");
+    }
+
+    const stored = await uploadImageBase64({
+      base64,
+      path: `${gameId}/challenge-${Date.now()}.png`,
+      contentType: "image/png"
+    });
+
+    return {
+      imageUrl: stored.url,
+      storagePath: stored.path,
+      prompt
+    };
+  } catch (error) {
+    console.error("Challenge image generation failed; using fallback challenge.", error);
+    return mockGenerateChallenge();
   }
-
-  const stored = await uploadImageBase64({
-    base64,
-    path: `${gameId}/challenge-${Date.now()}.png`,
-    contentType: "image/png"
-  });
-
-  return {
-    imageUrl: stored.url,
-    storagePath: stored.path,
-    prompt
-  };
 }
 
 async function refineStudentImagePrompt(

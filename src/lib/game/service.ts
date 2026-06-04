@@ -251,9 +251,70 @@ async function createGameSession(input: {
   throw new AppError("Could not create a unique join code. Try again.", 500);
 }
 
+async function deleteGameSessions(sessionIds: string[]) {
+  const ids = [...new Set(sessionIds)];
+  if (!ids.length) {
+    return {
+      deletedGameCount: 0,
+      removedStorageObjectCount: 0
+    };
+  }
+
+  const supabase = getSupabaseAdmin();
+  const [
+    { data: rounds, error: roundsError },
+    { data: images, error: imagesError }
+  ] = await Promise.all([
+    supabase
+      .from("rounds")
+      .select("challenge_image_storage_path")
+      .in("game_session_id", ids),
+    supabase
+      .from("generated_images")
+      .select("image_storage_path")
+      .in("game_session_id", ids)
+  ]);
+
+  const queryError = roundsError || imagesError;
+  if (queryError) {
+    throw queryError;
+  }
+
+  const paths = storagePathsForGameRenewal({
+    rounds: (rounds ?? []) as Pick<Round, "challenge_image_storage_path">[],
+    images: (images ?? []) as Pick<GeneratedImage, "image_storage_path">[]
+  });
+  const removedStorage = await removeStoredImages(paths);
+  const { error: deleteError } = await supabase.from("game_sessions").delete().in("id", ids);
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  return {
+    deletedGameCount: ids.length,
+    removedStorageObjectCount: removedStorage.removed
+  };
+}
+
+async function cleanupOtherGames(currentSessionId: string) {
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("game_sessions")
+    .select("id")
+    .neq("id", currentSessionId);
+  if (error) {
+    throw error;
+  }
+
+  return deleteGameSessions(((data ?? []) as Pick<GameSession, "id">[]).map((session) => session.id));
+}
+
 export async function createGame(input: z.infer<typeof createGameSchema>) {
   const { session, hostToken } = await createGameSession({
     hostPinHash: hashSecret(input.pin)
+  });
+  await cleanupOtherGames(session.id).catch((error) => {
+    console.error("Could not clean up older games after creating a new one.", error);
   });
   await broadcastGameUpdate(session.join_code, "game-created", { joinCode: session.join_code });
 
@@ -1038,34 +1099,9 @@ export async function archiveAndCreateNewGame(
 }
 
 async function cleanupGameStorageForRenewal(sessionId: string) {
-  const supabase = getSupabaseAdmin();
-  const [
-    { data: rounds, error: roundsError },
-    { data: images, error: imagesError }
-  ] = await Promise.all([
-    supabase
-      .from("rounds")
-      .select("challenge_image_storage_path")
-      .eq("game_session_id", sessionId),
-    supabase
-      .from("generated_images")
-      .select("image_storage_path")
-      .eq("game_session_id", sessionId)
-  ]);
-
-  const error = roundsError || imagesError;
-  if (error) {
-    throw error;
-  }
-
-  const paths = storagePathsForGameRenewal({
-    rounds: (rounds ?? []) as Pick<Round, "challenge_image_storage_path">[],
-    images: (images ?? []) as Pick<GeneratedImage, "image_storage_path">[]
-  });
-  const removedStorage = await removeStoredImages(paths);
-
+  const result = await deleteGameSessions([sessionId]);
   return {
-    removedStorageObjectCount: removedStorage.removed
+    removedStorageObjectCount: result.removedStorageObjectCount
   };
 }
 
@@ -1080,10 +1116,6 @@ export async function renewGame(joinCode: string, input: z.infer<typeof hostAuth
 
   try {
     const cleanup = await cleanupGameStorageForRenewal(session.id);
-    const { error } = await supabase.from("game_sessions").delete().eq("id", session.id);
-    if (error) {
-      throw error;
-    }
 
     await broadcastGameUpdate(session.join_code, "game-renewed", cleanup);
     await broadcastGameUpdate(created.session.join_code, "game-created", {
