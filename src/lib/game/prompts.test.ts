@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildBaseDragonPrompt,
   buildRoundChallengePrompt,
   buildStudentImagePrompt,
   cleanPrompt,
@@ -72,7 +73,15 @@ describe("prompt helpers", () => {
     expect(prompt).toContain("Add mist");
   });
 
-  it("builds evolved host challenge context for the next round", () => {
+  it("starts the game by asking students to create the dragon identity", () => {
+    const prompt = buildBaseDragonPrompt();
+
+    expect(prompt).toContain("Round 1 challenge: create your own");
+    expect(prompt).toContain("Focus on the dragon's identity first");
+    expect(prompt).toContain("simple fantasy setting hint");
+  });
+
+  it("builds round 2 as a training scene challenge", () => {
     const prompt = buildRoundChallengePrompt({
       roundNumber: 2,
       basePrompt: "A semi-realistic dragon beside a torchlit Nordic cove",
@@ -80,10 +89,26 @@ describe("prompt helpers", () => {
     });
 
     expect(prompt).toContain("round 2");
+    expect(prompt).toContain("Round 2 training goal");
+    expect(prompt).toContain("interaction, trainer moment, flight movement, or richer background");
     expect(prompt).toContain("Previous host challenge prompt:");
     expect(prompt).toContain("A semi-realistic dragon beside a torchlit Nordic cove");
     expect(prompt).toContain("New host instruction to adapt the challenge image:");
     expect(prompt).toContain("Make the dragon fly with other dragons in the sky");
-    expect(prompt).toContain("same dragon challenge has evolved");
+    expect(prompt).toContain("same dragon has progressed through training");
+  });
+
+  it("builds round 3 as a harder final trial", () => {
+    const prompt = buildRoundChallengePrompt({
+      roundNumber: 3,
+      basePrompt: "A blue dragon flying above a stormy harbor",
+      additionalInstruction: "Add a rescue mission during lightning and crashing waves"
+    });
+
+    expect(prompt).toContain("round 3");
+    expect(prompt).toContain("Round 3 final trial goal");
+    expect(prompt).toContain("harder multi-part challenge");
+    expect(prompt).toContain("Add a rescue mission during lightning and crashing waves");
+    expect(prompt).toContain("story stakes, precise composition, and dramatic lighting");
   });
 });

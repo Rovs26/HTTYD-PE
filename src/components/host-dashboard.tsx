@@ -103,6 +103,12 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
   const activePlayers = state?.players.filter((player) => !player.is_eliminated) ?? [];
   const completedImages = currentImages.filter((image) => image.generation_status === "complete");
   const scoredImages = completedImages.filter((image) => image.ai_similarity_score !== null);
+  const nextInstructionPlaceholder =
+    currentRound?.round_number === 1
+      ? "Add a scene challenge: the dragon meets a trainer, flies over cliffs, enters a village, or interacts with the background..."
+      : currentRound?.round_number === 2
+        ? "Add the final trial: storm flight, rescue scene, dangerous terrain, story stakes, dramatic lighting, and precise composition..."
+        : "Start the game first, then add the next round's training challenge here...";
 
   async function unlock(event: FormEvent) {
     event.preventDefault();
@@ -549,7 +555,7 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                     id="nextInstruction"
                     value={nextInstruction}
                     onChange={(event) => setNextInstruction(event.target.value)}
-                    placeholder="Make the dragon more cinematic, add glowing eyes, place it in a misty cove..."
+                    placeholder={nextInstructionPlaceholder}
                   />
                   <Button
                     icon={<ArrowRight className="h-4 w-4" />}

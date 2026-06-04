@@ -141,10 +141,11 @@ async function generateChallengeImageFromPrompt(input: {
   }
 
   try {
+    const refinedPrompt = await refineHostChallengePrompt(client, input.prompt);
     const outputFormat = imageOutputFormat();
     const result = await client.images.generate({
       model: imageModel(),
-      prompt: input.prompt,
+      prompt: refinedPrompt,
       size: imageSize(),
       quality: challengeImageQuality(),
       output_format: outputFormat,
@@ -169,19 +170,55 @@ async function generateChallengeImageFromPrompt(input: {
       return {
         imageUrl: stored.url,
         storagePath: stored.path,
-        prompt: input.prompt
+        prompt: refinedPrompt
       };
     } catch (uploadError) {
       console.error("Challenge image upload failed; using generated data URL.", uploadError);
       return {
         imageUrl: `data:${contentType};base64,${base64}`,
         storagePath: null,
-        prompt: input.prompt
+        prompt: refinedPrompt
       };
     }
   } catch (error) {
     console.error("Challenge image generation failed; using fallback challenge.", error);
     return mockGenerateChallenge(input.prompt);
+  }
+}
+
+async function refineHostChallengePrompt(client: OpenAI, prompt: string) {
+  try {
+    const response = await client.responses.create({
+      model: promptModel(),
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: [
+                "You are the Dragon Prompt Companion for a live classroom game.",
+                "Rewrite the provided evolving challenge context into exactly one image-generation prompt.",
+                "Preserve the dragon identity and previous visual foundation, then clearly apply the new round goal and host instruction.",
+                "For round 2, make the training challenge about interaction, movement, or a stronger background.",
+                "For round 3, make the final trial harder with action, environment pressure, story stakes, precise composition, and dramatic lighting.",
+                "Keep the result semi-realistic, cinematic, fantasy, polished, and classroom-safe.",
+                "Do not mention the classroom, scoring, voting, prompt engineering, instructions, markdown, or JSON.",
+                "Return only the final prompt text.",
+                "",
+                prompt
+              ].join("\n")
+            }
+          ]
+        }
+      ],
+      max_output_tokens: 700
+    });
+
+    const refinedPrompt = response.output_text.trim();
+    return refinedPrompt || prompt;
+  } catch {
+    return prompt;
   }
 }
 

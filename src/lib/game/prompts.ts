@@ -56,23 +56,28 @@ export function buildRoundChallengePrompt(input: {
 }) {
   const basePrompt = cleanPrompt(input.basePrompt);
   const additionalInstruction = cleanPrompt(input.additionalInstruction);
+  const roundGoal =
+    input.roundNumber === 2
+      ? "Round 2 training goal: keep the same dragon identity, then add a clear interaction, trainer moment, flight movement, or richer background setting."
+      : "Round 3 final trial goal: keep the same dragon identity, then add a harder multi-part challenge with action, environment pressure, story stakes, precise composition, and dramatic lighting.";
 
   return [
     `Create the evolved host challenge image for round ${input.roundNumber} of a classroom dragon prompt game.`,
-    "Use the previous host challenge prompt as the visual foundation, preserving the dragon identity, fantasy world, semi-realistic cinematic style, lighting continuity, and recognizable scene details.",
+    roundGoal,
+    "Use the previous host challenge prompt as the visual foundation, preserving the dragon identity, fantasy world, semi-realistic cinematic style, lighting continuity, and recognizable details.",
     `Previous host challenge prompt:\n${basePrompt}`,
     `New host instruction to adapt the challenge image:\n${additionalInstruction}`,
-    "The new image must visibly reflect the new host instruction while still feeling like the same dragon challenge has evolved.",
+    "The new image must visibly reflect the new host instruction while still feeling like the same dragon has progressed through training.",
     "Render one polished semi-realistic cinematic fantasy image with believable scale texture, depth, natural lighting, and no visible text, labels, watermarks, UI, split panels, flat vector art, emoji styling, or simple cartoon shapes."
   ].join("\n\n");
 }
 
 export function buildBaseDragonPrompt() {
   return [
-    "A semi-realistic cinematic fantasy dragon portrait for a classroom prompt engineering challenge.",
-    "The dragon is friendly but powerful, with expressive eyes, layered horns, detailed metallic scales, subtle battle-worn texture, and dramatic wing posture.",
-    "Set the scene in a windswept Nordic island cove with torchlight, sea mist, carved wood, distant cliffs, and warm golden highlights.",
+    "Round 1 challenge: create your own semi-realistic cinematic fantasy dragon for a classroom prompt engineering game.",
+    "Focus on the dragon's identity first: friendly but powerful personality, expressive eyes, layered horns, detailed metallic scales, subtle texture, memorable silhouette, and dramatic wing posture.",
+    "Use only a simple fantasy setting hint such as torchlight, sea mist, carved wood, distant cliffs, or warm golden highlights so the dragon remains the clear subject.",
     "Use a rich 3D fantasy illustration style with believable depth and lighting, not flat vector art, emoji styling, or simple cartoon shapes.",
-    "Make it visually rich enough that students can try to recreate it from prompt details, with no visible text or labels."
+    "Make it visually rich enough that students can create the dragon from prompt details, with no visible text or labels."
   ].join(" ");
 }

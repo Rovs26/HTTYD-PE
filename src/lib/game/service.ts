@@ -489,7 +489,7 @@ export async function startGame(joinCode: string, hostToken: string) {
     .insert({
       game_session_id: session.id,
       round_number: 1,
-      title: "Round 1: Recreate the Dragon",
+      title: "Round 1: Create Your Dragon",
       challenge_image_url: challenge.imageUrl,
       challenge_image_storage_path: challenge.storagePath,
       base_prompt: challenge.prompt,
@@ -1174,8 +1174,8 @@ export async function advanceRound(joinCode: string, input: z.infer<typeof advan
   const additionalInstruction =
     input.additionalInstruction ??
     (round.round_number === 1
-      ? "Improve your previous dragon prompt with stronger visual detail, clearer style, and a more cinematic scene."
-      : "Make your final dragon image more polished, dramatic, and faithful to the original challenge.");
+      ? "Train your dragon into a richer scene: add a clear background, interaction, trainer moment, or flight movement while preserving the dragon's identity."
+      : "Give your dragon a final training trial: add dynamic action, a difficult environment, story stakes, precise composition, and dramatic lighting while preserving the dragon's identity.");
 
   const { rankings } = await recomputeRankings(joinCode, { hostToken: input.hostToken });
   const countToAdvance = advancingCount(round.round_number, rankings.length);
@@ -1217,8 +1217,8 @@ export async function advanceRound(joinCode: string, input: z.infer<typeof advan
       round_number: nextRoundNumber,
       title:
         nextRoundNumber === 2
-          ? "Round 2: Upgrade the Dragon"
-          : "Round 3: Final Dragon Flight",
+          ? "Round 2: Train the Scene"
+          : "Round 3: Final Dragon Trial",
       challenge_image_url: nextChallenge.imageUrl,
       challenge_image_storage_path: nextChallenge.storagePath,
       base_prompt: nextChallenge.prompt,

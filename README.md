@@ -26,7 +26,8 @@ npm run dev
 - Real image generation uses `OPENAI_IMAGE_MODEL`, defaulting to `gpt-image-2`.
 - Image generation defaults to `OPENAI_IMAGE_SIZE=1024x1024`, `OPENAI_IMAGE_OUTPUT_FORMAT=jpeg`, `OPENAI_CHALLENGE_IMAGE_QUALITY=medium`, and `OPENAI_STUDENT_IMAGE_QUALITY=medium` for a better semi-realistic classroom image without using high quality.
 - Student image generation first uses `OPENAI_PROMPT_MODEL`, defaulting to `gpt-5.4-mini`, as a prompt companion that merges the base challenge, host round instruction, and student's locked prompt chain before calling the Images API.
-- Advancing to round 2 or 3 also generates a new evolved host challenge image from the previous challenge prompt plus the host's next-round instruction.
+- Host challenge image generation also uses the prompt companion. Round 1 creates the dragon identity, Round 2 adds interaction or background, and Round 3 creates a harder final trial.
+- Clicking `Advance Round` immediately generates the next host challenge image from the previous challenge plus the host's next-round instruction.
 - Vision scoring uses `OPENAI_EVAL_MODEL`, defaulting to `gpt-5.4-mini`, and `OPENAI_VISION_DETAIL=low` to reduce image-token cost.
 - After a game ends, the host can use `Archive & New Game` to preserve rankings and final top-four images while removing the other generated image files from Supabase Storage.
 - If a live game gets messed up, the host can use `Renew Game` to discard the current game entirely, remove its stored images, and start over with a new join code.
