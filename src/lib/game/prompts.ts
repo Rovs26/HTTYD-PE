@@ -32,7 +32,7 @@ export function buildStudentImagePrompt(input: {
     : "";
 
   const sections = [
-    "Create one cohesive fantasy dragon image.",
+    "Create one cohesive semi-realistic cinematic fantasy dragon image.",
     "Preserve the original challenge dragon, scene, lighting, mood, and composition unless the round instruction clearly changes them.",
     `Original challenge brief:\n${basePrompt}`
   ];
@@ -43,7 +43,7 @@ export function buildStudentImagePrompt(input: {
 
   sections.push(
     `Student locked prompt chain:\n${studentPrompt}`,
-    "Render a single polished cinematic image with no visible text, labels, watermarks, UI, or split panels."
+    "Render a single polished cinematic fantasy illustration with believable scale texture, dramatic depth, natural lighting, and no visible text, labels, watermarks, UI, split panels, flat vector art, emoji styling, or simple cartoon shapes."
   );
 
   return sections.join("\n\n");
@@ -51,9 +51,10 @@ export function buildStudentImagePrompt(input: {
 
 export function buildBaseDragonPrompt() {
   return [
-    "A cinematic, original fantasy dragon portrait for a classroom prompt engineering challenge.",
-    "The dragon is friendly but powerful, with expressive eyes, detailed scales, and dramatic wing posture.",
-    "Set the scene in a windswept Nordic island cove with torchlight, sea mist, and warm golden highlights.",
-    "Make it visually rich enough that students can try to recreate it from prompt details."
+    "A semi-realistic cinematic fantasy dragon portrait for a classroom prompt engineering challenge.",
+    "The dragon is friendly but powerful, with expressive eyes, layered horns, detailed metallic scales, subtle battle-worn texture, and dramatic wing posture.",
+    "Set the scene in a windswept Nordic island cove with torchlight, sea mist, carved wood, distant cliffs, and warm golden highlights.",
+    "Use a rich 3D fantasy illustration style with believable depth and lighting, not flat vector art, emoji styling, or simple cartoon shapes.",
+    "Make it visually rich enough that students can try to recreate it from prompt details, with no visible text or labels."
   ].join(" ");
 }

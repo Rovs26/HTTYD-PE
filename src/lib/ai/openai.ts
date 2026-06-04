@@ -23,30 +23,60 @@ function imageModel() {
 }
 
 function imageSize() {
-  return process.env.OPENAI_IMAGE_SIZE ?? "768x768";
+  const value = process.env.OPENAI_IMAGE_SIZE;
+  if (
+    value === "1024x1024" ||
+    value === "1536x1024" ||
+    value === "1024x1536" ||
+    value === "auto"
+  ) {
+    return value;
+  }
+  return "1024x1024";
 }
 
 type ImageQuality = "standard" | "hd" | "low" | "medium" | "high" | "auto";
 
 function imageQuality(value: string | undefined, fallback: ImageQuality): ImageQuality {
-  if (value === "low" || value === "medium") {
+  if (value === "low" || value === "medium" || value === "high" || value === "auto") {
     return value;
   }
   return fallback;
 }
 
+function minimumMediumQuality(value: string | undefined, fallback: ImageQuality): ImageQuality {
+  const quality = imageQuality(value, fallback);
+  return quality === "low" ? "medium" : quality;
+}
+
 function challengeImageQuality() {
-  return imageQuality(
+  return minimumMediumQuality(
     process.env.OPENAI_CHALLENGE_IMAGE_QUALITY ?? process.env.OPENAI_IMAGE_QUALITY,
     "medium"
   );
 }
 
 function studentImageQuality() {
-  return imageQuality(
+  return minimumMediumQuality(
     process.env.OPENAI_STUDENT_IMAGE_QUALITY ?? process.env.OPENAI_IMAGE_QUALITY,
-    "low"
+    "medium"
   );
+}
+
+function imageOutputFormat(): "png" | "jpeg" | "webp" {
+  const value = process.env.OPENAI_IMAGE_OUTPUT_FORMAT;
+  if (value === "png" || value === "webp") {
+    return value;
+  }
+  return "jpeg";
+}
+
+function imageContentType(format = imageOutputFormat()) {
+  return `image/${format}`;
+}
+
+function imageExtension(format = imageOutputFormat()) {
+  return format === "jpeg" ? "jpg" : format;
 }
 
 function evalModel() {
@@ -77,28 +107,44 @@ export async function generateChallengeImage(gameId: string) {
 
   try {
     const prompt = buildBaseDragonPrompt();
+    const outputFormat = imageOutputFormat();
     const result = await client.images.generate({
       model: imageModel(),
       prompt,
       size: imageSize(),
-      quality: challengeImageQuality()
+      quality: challengeImageQuality(),
+      output_format: outputFormat,
+      output_compression: outputFormat === "png" ? undefined : 86,
+      background: "opaque"
     });
     const base64 = result.data?.[0]?.b64_json;
     if (!base64) {
       throw new Error("OpenAI did not return image data.");
     }
 
-    const stored = await uploadImageBase64({
-      base64,
-      path: `${gameId}/challenge-${Date.now()}.png`,
-      contentType: "image/png"
-    });
+    const contentType = imageContentType(outputFormat);
+    const path = `${gameId}/challenge-${Date.now()}.${imageExtension(outputFormat)}`;
 
-    return {
-      imageUrl: stored.url,
-      storagePath: stored.path,
-      prompt
-    };
+    try {
+      const stored = await uploadImageBase64({
+        base64,
+        path,
+        contentType
+      });
+
+      return {
+        imageUrl: stored.url,
+        storagePath: stored.path,
+        prompt
+      };
+    } catch (uploadError) {
+      console.error("Challenge image upload failed; using generated data URL.", uploadError);
+      return {
+        imageUrl: `data:${contentType};base64,${base64}`,
+        storagePath: null,
+        prompt
+      };
+    }
   } catch (error) {
     console.error("Challenge image generation failed; using fallback challenge.", error);
     return mockGenerateChallenge();
@@ -189,11 +235,15 @@ export async function generateStudentImage(input: {
     additionalInstruction: input.additionalInstruction
   });
 
+  const outputFormat = imageOutputFormat();
   const result = await client.images.generate({
     model: imageModel(),
     prompt: refinedPrompt,
     size: imageSize(),
-    quality: studentImageQuality()
+    quality: studentImageQuality(),
+    output_format: outputFormat,
+    output_compression: outputFormat === "png" ? undefined : 86,
+    background: "opaque"
   });
   const base64 = result.data?.[0]?.b64_json;
   if (!base64) {
@@ -202,8 +252,8 @@ export async function generateStudentImage(input: {
 
   const stored = await uploadImageBase64({
     base64,
-    path: `${input.gameId}/round-${input.roundNumber}/${input.playerId}-${Date.now()}.png`,
-    contentType: "image/png"
+    path: `${input.gameId}/round-${input.roundNumber}/${input.playerId}-${Date.now()}.${imageExtension(outputFormat)}`,
+    contentType: imageContentType(outputFormat)
   });
 
   return {
