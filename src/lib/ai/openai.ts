@@ -40,28 +40,39 @@ function imageSize() {
 }
 
 type ImageQuality = "standard" | "hd" | "low" | "medium" | "high" | "auto";
+type CappedImageQuality = "low" | "medium";
 
-function imageQuality(value: string | undefined, fallback: ImageQuality): ImageQuality {
-  if (value === "low" || value === "medium" || value === "high" || value === "auto") {
+function imageQuality(value: string | undefined, fallback: CappedImageQuality): ImageQuality {
+  if (
+    value === "low" ||
+    value === "medium" ||
+    value === "high" ||
+    value === "auto" ||
+    value === "standard" ||
+    value === "hd"
+  ) {
     return value;
   }
   return fallback;
 }
 
-function minimumMediumQuality(value: string | undefined, fallback: ImageQuality): ImageQuality {
+export function cappedImageQuality(
+  value: string | undefined,
+  fallback: CappedImageQuality
+): CappedImageQuality {
   const quality = imageQuality(value, fallback);
-  return quality === "low" || quality === "high" || quality === "auto" ? "medium" : quality;
+  return quality === "low" ? "low" : "medium";
 }
 
 function challengeImageQuality() {
-  return minimumMediumQuality(
+  return cappedImageQuality(
     process.env.OPENAI_CHALLENGE_IMAGE_QUALITY ?? process.env.OPENAI_IMAGE_QUALITY,
     "medium"
   );
 }
 
 function studentImageQuality() {
-  return minimumMediumQuality(
+  return cappedImageQuality(
     process.env.OPENAI_STUDENT_IMAGE_QUALITY ?? process.env.OPENAI_IMAGE_QUALITY,
     "medium"
   );

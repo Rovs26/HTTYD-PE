@@ -24,7 +24,7 @@ npm run dev
 ## Notes
 
 - Real image generation uses `OPENAI_IMAGE_MODEL`, defaulting to `gpt-image-2`.
-- Image generation defaults to `OPENAI_IMAGE_SIZE=1024x1024`, `OPENAI_IMAGE_OUTPUT_FORMAT=jpeg`, `OPENAI_CHALLENGE_IMAGE_QUALITY=medium`, and `OPENAI_STUDENT_IMAGE_QUALITY=medium` for a better semi-realistic classroom image without using high quality.
+- Image generation defaults to `OPENAI_IMAGE_SIZE=1024x1024`, `OPENAI_IMAGE_OUTPUT_FORMAT=jpeg`, `OPENAI_CHALLENGE_IMAGE_QUALITY=medium`, and `OPENAI_STUDENT_IMAGE_QUALITY=medium`. All generated game images are capped to `low` or `medium`; `high`, `auto`, `hd`, and `standard` are forced down to `medium`.
 - Student image generation first uses `OPENAI_PROMPT_MODEL`, defaulting to `gpt-5.4-mini`, as a prompt companion that merges the base challenge, host round instruction, and student's locked prompt chain before calling the Images API.
 - Host challenge image generation also uses the prompt companion. Round 1 creates the dragon identity, Round 2 adds interaction or background, and Round 3 creates a harder final trial.
 - Clicking `Advance Round` immediately generates the next host challenge image from the previous challenge plus the host's next-round instruction.
