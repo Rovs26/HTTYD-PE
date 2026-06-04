@@ -2,8 +2,10 @@
 
 import QRCode from "qrcode";
 import {
+  AlertTriangle,
   ArrowRight,
   Crown,
+  Home,
   ImageIcon,
   Lock,
   Play,
@@ -45,6 +47,16 @@ type RenewGameResponse = {
   };
 };
 
+type AbandonGameResponse = {
+  ok: boolean;
+  cleanup: {
+    deletedGameCount: number;
+    removedStorageObjectCount: number;
+  };
+};
+
+type ConfirmationAction = "renew" | "abandon";
+
 export function HostDashboard({ joinCode }: { joinCode: string }) {
   const router = useRouter();
   const [hostToken, setHostToken] = useState<string | null>(null);
@@ -55,6 +67,7 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [origin, setOrigin] = useState("");
   const [nextInstruction, setNextInstruction] = useState("");
+  const [confirmation, setConfirmation] = useState<ConfirmationAction | null>(null);
 
   useEffect(() => {
     setHostToken(window.localStorage.getItem(hostTokenKey(joinCode)));
@@ -194,15 +207,11 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
 
   async function renewGame() {
     if (!hostToken) return;
-    const confirmed = window.confirm(
-      "Renew this game from scratch? This deletes the current game, players, prompts, votes, rankings, and all stored images."
-    );
-    if (!confirmed) return;
-
     const path = `/api/games/${joinCode}/host/renew`;
     setBusy(path);
     setError(null);
     setMessage(null);
+    setConfirmation(null);
     try {
       const data = await requestJson<RenewGameResponse>(path, { hostToken });
       window.localStorage.setItem(hostTokenKey(data.session.join_code), data.hostToken);
@@ -213,6 +222,43 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
       setBusy(null);
     }
   }
+
+  async function abandonGame() {
+    if (!hostToken) return;
+    const path = `/api/games/${joinCode}/host/abandon`;
+    setBusy(path);
+    setError(null);
+    setMessage(null);
+    setConfirmation(null);
+    try {
+      await requestJson<AbandonGameResponse>(path, { hostToken });
+      window.localStorage.removeItem(hostTokenKey(joinCode));
+      router.push("/");
+    } catch (abandonError) {
+      setError(abandonError instanceof Error ? abandonError.message : "Could not leave game");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const confirmationCopy =
+    confirmation === "renew"
+      ? {
+          title: "Renew game?",
+          body: "This deletes the current game, players, prompts, votes, rankings, and stored images, then creates a fresh join code.",
+          confirmLabel: "Renew Game",
+          busyKey: `/api/games/${joinCode}/host/renew`,
+          onConfirm: renewGame
+        }
+      : confirmation === "abandon"
+        ? {
+            title: "Back to home?",
+            body: "This completely abandons the current game, deletes its data and stored images, and returns to the home screen.",
+            confirmLabel: "Back to Home",
+            busyKey: `/api/games/${joinCode}/host/abandon`,
+            onConfirm: abandonGame
+          }
+        : null;
 
   if (!hostToken) {
     return (
@@ -259,6 +305,13 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button
+                icon={<Home className="h-4 w-4" />}
+                variant="ghost"
+                onClick={() => setConfirmation("abandon")}
+              >
+                Back to Home
+              </Button>
               <StatusPill tone="gold">Code {joinCode}</StatusPill>
               <StatusPill tone={state?.session.status === "active" ? "cool" : "neutral"}>
                 {state?.session.status ?? "loading"}
@@ -374,7 +427,7 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                     icon={<RefreshCw className="h-4 w-4" />}
                     variant="danger"
                     loading={busy === `/api/games/${joinCode}/host/renew`}
-                    onClick={() => void renewGame()}
+                    onClick={() => setConfirmation("renew")}
                   >
                     Renew Game
                   </Button>
@@ -611,7 +664,62 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
           </div>
         </section>
       </div>
+      {confirmationCopy ? (
+        <ConfirmDialog
+          title={confirmationCopy.title}
+          body={confirmationCopy.body}
+          confirmLabel={confirmationCopy.confirmLabel}
+          loading={busy === confirmationCopy.busyKey}
+          onCancel={() => setConfirmation(null)}
+          onConfirm={() => void confirmationCopy.onConfirm()}
+        />
+      ) : null}
     </main>
+  );
+}
+
+function ConfirmDialog({
+  title,
+  body,
+  confirmLabel,
+  loading,
+  onCancel,
+  onConfirm
+}: {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  loading: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-title"
+    >
+      <div className="panel-strong w-full max-w-md rounded-lg p-5 shadow-2xl shadow-slate-950/50">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-md bg-red-500/20 text-red-100">
+            <AlertTriangle className="h-6 w-6" aria-hidden />
+          </div>
+          <h2 id="confirm-title" className="text-2xl font-black">
+            {title}
+          </h2>
+        </div>
+        <p className="text-sm font-semibold leading-relaxed text-slate-200">{body}</p>
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <Button variant="ghost" disabled={loading} onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="danger" loading={loading} onClick={onConfirm}>
+            {confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 

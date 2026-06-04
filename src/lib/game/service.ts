@@ -284,7 +284,14 @@ async function deleteGameSessions(sessionIds: string[]) {
     rounds: (rounds ?? []) as Pick<Round, "challenge_image_storage_path">[],
     images: (images ?? []) as Pick<GeneratedImage, "image_storage_path">[]
   });
-  const removedStorage = await removeStoredImages(paths);
+  let removedStorageObjectCount = 0;
+  try {
+    const removedStorage = await removeStoredImages(paths);
+    removedStorageObjectCount = removedStorage.removed;
+  } catch (storageError) {
+    console.error("Could not remove every stored image while deleting games.", storageError);
+  }
+
   const { error: deleteError } = await supabase.from("game_sessions").delete().in("id", ids);
   if (deleteError) {
     throw deleteError;
@@ -292,7 +299,7 @@ async function deleteGameSessions(sessionIds: string[]) {
 
   return {
     deletedGameCount: ids.length,
-    removedStorageObjectCount: removedStorage.removed
+    removedStorageObjectCount
   };
 }
 
@@ -1131,6 +1138,18 @@ export async function renewGame(joinCode: string, input: z.infer<typeof hostAuth
     await supabase.from("game_sessions").delete().eq("id", created.session.id);
     throw renewError;
   }
+}
+
+export async function abandonGame(joinCode: string, input: z.infer<typeof hostAuthSchema>) {
+  const session = await requireHost(joinCode, input.hostToken);
+  const cleanup = await deleteGameSessions([session.id]);
+
+  await broadcastGameUpdate(session.join_code, "game-abandoned", cleanup);
+
+  return {
+    ok: true,
+    cleanup
+  };
 }
 
 export async function advanceRound(joinCode: string, input: z.infer<typeof advanceRoundSchema>) {
