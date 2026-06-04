@@ -8,7 +8,12 @@ import {
 import { buildStudentImagePrompt, cleanPrompt, combinePromptChain } from "@/lib/game/prompts";
 import { advancingCount, computeRankings, nextRoundCutLine } from "@/lib/game/ranking";
 import { AppError } from "@/lib/http";
-import { generateChallengeImage, generateStudentImage, scoreImageSimilarity } from "@/lib/ai/openai";
+import {
+  generateChallengeImage,
+  generateRoundChallengeImage,
+  generateStudentImage,
+  scoreImageSimilarity
+} from "@/lib/ai/openai";
 import { broadcastGameUpdate } from "@/lib/realtime";
 import { removeStoredImages } from "@/lib/storage";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -1199,6 +1204,12 @@ export async function advanceRound(joinCode: string, input: z.infer<typeof advan
   );
 
   const nextRoundNumber = round.round_number + 1;
+  const nextChallenge = await generateRoundChallengeImage({
+    gameId: session.id,
+    roundNumber: nextRoundNumber,
+    basePrompt: round.base_prompt,
+    additionalInstruction
+  });
   const { data: nextRound, error: roundError } = await supabase
     .from("rounds")
     .insert({
@@ -1208,9 +1219,9 @@ export async function advanceRound(joinCode: string, input: z.infer<typeof advan
         nextRoundNumber === 2
           ? "Round 2: Upgrade the Dragon"
           : "Round 3: Final Dragon Flight",
-      challenge_image_url: round.challenge_image_url,
-      challenge_image_storage_path: round.challenge_image_storage_path,
-      base_prompt: round.base_prompt,
+      challenge_image_url: nextChallenge.imageUrl,
+      challenge_image_storage_path: nextChallenge.storagePath,
+      base_prompt: nextChallenge.prompt,
       additional_instruction: additionalInstruction,
       status: "setup"
     })

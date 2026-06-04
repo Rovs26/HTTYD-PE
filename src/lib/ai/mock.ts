@@ -78,12 +78,11 @@ function svgDataUrl(label: string, seed: string) {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 }
 
-export async function mockGenerateChallenge() {
-  const basePrompt = buildBaseDragonPrompt();
+export async function mockGenerateChallenge(prompt = buildBaseDragonPrompt()) {
   return {
-    imageUrl: svgDataUrl("Challenge Dragon", basePrompt),
+    imageUrl: svgDataUrl("Challenge Dragon", prompt),
     storagePath: null,
-    prompt: basePrompt
+    prompt
   };
 }
 

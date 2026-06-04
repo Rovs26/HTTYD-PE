@@ -1,5 +1,9 @@
 import OpenAI from "openai";
-import { buildBaseDragonPrompt, buildStudentImagePrompt } from "@/lib/game/prompts";
+import {
+  buildBaseDragonPrompt,
+  buildRoundChallengePrompt,
+  buildStudentImagePrompt
+} from "@/lib/game/prompts";
 import { shouldUseMockAi } from "@/lib/config";
 import { mockGenerateChallenge, mockGenerateImage, mockScoreSimilarity } from "@/lib/ai/mock";
 import { uploadDataUrl, uploadImageBase64 } from "@/lib/storage";
@@ -46,7 +50,7 @@ function imageQuality(value: string | undefined, fallback: ImageQuality): ImageQ
 
 function minimumMediumQuality(value: string | undefined, fallback: ImageQuality): ImageQuality {
   const quality = imageQuality(value, fallback);
-  return quality === "low" ? "medium" : quality;
+  return quality === "low" || quality === "high" || quality === "auto" ? "medium" : quality;
 }
 
 function challengeImageQuality() {
@@ -96,21 +100,51 @@ function visionDetail(): "low" | "high" | "auto" {
 }
 
 export async function generateChallengeImage(gameId: string) {
+  return generateChallengeImageFromPrompt({
+    gameId,
+    prompt: buildBaseDragonPrompt(),
+    pathPrefix: "challenge"
+  });
+}
+
+export async function generateRoundChallengeImage(input: {
+  gameId: string;
+  roundNumber: number;
+  basePrompt: string;
+  additionalInstruction: string;
+}) {
+  const prompt = buildRoundChallengePrompt({
+    basePrompt: input.basePrompt,
+    additionalInstruction: input.additionalInstruction,
+    roundNumber: input.roundNumber
+  });
+
+  return generateChallengeImageFromPrompt({
+    gameId: input.gameId,
+    prompt,
+    pathPrefix: `round-${input.roundNumber}/challenge`
+  });
+}
+
+async function generateChallengeImageFromPrompt(input: {
+  gameId: string;
+  prompt: string;
+  pathPrefix: string;
+}) {
   if (shouldUseMockAi()) {
-    return mockGenerateChallenge();
+    return mockGenerateChallenge(input.prompt);
   }
 
   const client = getOpenAI();
   if (!client) {
-    return mockGenerateChallenge();
+    return mockGenerateChallenge(input.prompt);
   }
 
   try {
-    const prompt = buildBaseDragonPrompt();
     const outputFormat = imageOutputFormat();
     const result = await client.images.generate({
       model: imageModel(),
-      prompt,
+      prompt: input.prompt,
       size: imageSize(),
       quality: challengeImageQuality(),
       output_format: outputFormat,
@@ -123,7 +157,7 @@ export async function generateChallengeImage(gameId: string) {
     }
 
     const contentType = imageContentType(outputFormat);
-    const path = `${gameId}/challenge-${Date.now()}.${imageExtension(outputFormat)}`;
+    const path = `${input.gameId}/${input.pathPrefix}-${Date.now()}.${imageExtension(outputFormat)}`;
 
     try {
       const stored = await uploadImageBase64({
@@ -135,19 +169,19 @@ export async function generateChallengeImage(gameId: string) {
       return {
         imageUrl: stored.url,
         storagePath: stored.path,
-        prompt
+        prompt: input.prompt
       };
     } catch (uploadError) {
       console.error("Challenge image upload failed; using generated data URL.", uploadError);
       return {
         imageUrl: `data:${contentType};base64,${base64}`,
         storagePath: null,
-        prompt
+        prompt: input.prompt
       };
     }
   } catch (error) {
     console.error("Challenge image generation failed; using fallback challenge.", error);
-    return mockGenerateChallenge();
+    return mockGenerateChallenge(input.prompt);
   }
 }
 

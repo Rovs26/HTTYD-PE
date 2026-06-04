@@ -49,6 +49,24 @@ export function buildStudentImagePrompt(input: {
   return sections.join("\n\n");
 }
 
+export function buildRoundChallengePrompt(input: {
+  basePrompt: string;
+  additionalInstruction: string;
+  roundNumber: number;
+}) {
+  const basePrompt = cleanPrompt(input.basePrompt);
+  const additionalInstruction = cleanPrompt(input.additionalInstruction);
+
+  return [
+    `Create the evolved host challenge image for round ${input.roundNumber} of a classroom dragon prompt game.`,
+    "Use the previous host challenge prompt as the visual foundation, preserving the dragon identity, fantasy world, semi-realistic cinematic style, lighting continuity, and recognizable scene details.",
+    `Previous host challenge prompt:\n${basePrompt}`,
+    `New host instruction to adapt the challenge image:\n${additionalInstruction}`,
+    "The new image must visibly reflect the new host instruction while still feeling like the same dragon challenge has evolved.",
+    "Render one polished semi-realistic cinematic fantasy image with believable scale texture, depth, natural lighting, and no visible text, labels, watermarks, UI, split panels, flat vector art, emoji styling, or simple cartoon shapes."
+  ].join("\n\n");
+}
+
 export function buildBaseDragonPrompt() {
   return [
     "A semi-realistic cinematic fantasy dragon portrait for a classroom prompt engineering challenge.",

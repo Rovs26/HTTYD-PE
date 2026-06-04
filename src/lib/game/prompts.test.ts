@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildStudentImagePrompt, cleanPrompt, combinePromptChain } from "@/lib/game/prompts";
+import {
+  buildRoundChallengePrompt,
+  buildStudentImagePrompt,
+  cleanPrompt,
+  combinePromptChain
+} from "@/lib/game/prompts";
 import type { PromptSubmission } from "@/lib/types";
 
 function submission(partial: Partial<PromptSubmission>): PromptSubmission {
@@ -65,5 +70,20 @@ describe("prompt helpers", () => {
     expect(prompt).not.toContain("Host instruction for this round:");
     expect(prompt).toContain("Original dragon");
     expect(prompt).toContain("Add mist");
+  });
+
+  it("builds evolved host challenge context for the next round", () => {
+    const prompt = buildRoundChallengePrompt({
+      roundNumber: 2,
+      basePrompt: "A semi-realistic dragon beside a torchlit Nordic cove",
+      additionalInstruction: "Make the dragon fly with other dragons in the sky"
+    });
+
+    expect(prompt).toContain("round 2");
+    expect(prompt).toContain("Previous host challenge prompt:");
+    expect(prompt).toContain("A semi-realistic dragon beside a torchlit Nordic cove");
+    expect(prompt).toContain("New host instruction to adapt the challenge image:");
+    expect(prompt).toContain("Make the dragon fly with other dragons in the sky");
+    expect(prompt).toContain("same dragon challenge has evolved");
   });
 });
