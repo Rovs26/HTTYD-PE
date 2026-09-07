@@ -1118,53 +1118,16 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
             </Button>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <Button
-              size="sm"
-              variant="ghost"
-              icon={<Settings2 className="h-4 w-4" aria-hidden />}
-              onClick={() => setSettingsOpen(true)}
-            >
-              Settings
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              icon={<Download className="h-4 w-4" aria-hidden />}
-              loading={busy === "export"}
-              disabled={mutationBusy || !currentRound}
-              onClick={() => void exportResults()}
-            >
-              Export
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              icon={<Crown className="h-4 w-4" aria-hidden />}
-              disabled={mutationBusy || !currentRound || state?.session.status === "ended"}
-              onClick={() => void post(`/api/games/${joinCode}/host/action`, { action: "end_game" })}
-            >
-              End game
-            </Button>
-            <Button
-              size="sm"
-              variant="danger"
-              icon={<RefreshCw className="h-4 w-4" aria-hidden />}
-              disabled={mutationBusy}
-              onClick={() => setConfirmation("renew")}
-            >
-              Renew
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              icon={<Home className="h-4 w-4" aria-hidden />}
-              disabled={mutationBusy}
-              onClick={() => setConfirmation("abandon")}
-            >
-              Home
-            </Button>
-          </div>
+          {/* Occasional and destructive actions live in the drawer. The footer holds only
+              what a teacher touches while the game is running. */}
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<Settings2 className="h-4 w-4" aria-hidden />}
+            onClick={() => setSettingsOpen(true)}
+          >
+            Settings
+          </Button>
         </div>
       </footer>
 
@@ -1218,7 +1181,7 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
               <select
                 id="scoringMode"
                 value={scoringMode}
-                disabled={mutationBusy || Boolean(currentRound)}
+                disabled={mutationBusy}
                 onChange={(event) =>
                   void updateScoring(
                     event.target.value as ScoringMode,
@@ -1245,7 +1208,7 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                 max="1"
                 step="0.05"
                 value={voteWeightDraft}
-                disabled={mutationBusy || Boolean(currentRound) || scoringMode !== "blended"}
+                disabled={mutationBusy || scoringMode !== "blended"}
                 aria-valuetext={`${Math.round(voteWeightDraft * 100)}% vote weight`}
                 onChange={(event) => setVoteWeightDraft(Number(event.target.value))}
                 onPointerUp={(event) => void commitVoteWeight(Number(event.currentTarget.value))}
@@ -1255,7 +1218,8 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
               />
               <p className="text-[14px] text-muted">
                 {titleForScoringMode(scoringMode)} · {Math.round(voteWeightDraft * 100)}% vote
-                weight
+                weight. Safe to change mid-game — it only affects the next recompute, so it is
+                the way out if AI scoring stalls.
               </p>
             </div>
 
@@ -1283,6 +1247,56 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
               <p className="text-[14px] text-muted">
                 4 lanes is the recommended balance. 8 may hit rate limits.
               </p>
+            </div>
+
+            <div className="space-y-3 border-t border-line pt-5">
+              <p className="eyebrow">Game</p>
+              <Button
+                variant="ghost"
+                className="w-full"
+                icon={<Download className="h-4 w-4" aria-hidden />}
+                loading={busy === "export"}
+                disabled={mutationBusy || !currentRound}
+                onClick={() => void exportResults()}
+              >
+                Export results
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full"
+                icon={<Crown className="h-4 w-4" aria-hidden />}
+                disabled={mutationBusy || !currentRound || state?.session.status === "ended"}
+                onClick={() => {
+                  setSettingsOpen(false);
+                  void post(`/api/games/${joinCode}/host/action`, { action: "end_game" });
+                }}
+              >
+                End game now
+              </Button>
+              <Button
+                variant="danger"
+                className="w-full"
+                icon={<RefreshCw className="h-4 w-4" aria-hidden />}
+                disabled={mutationBusy}
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setConfirmation("renew");
+                }}
+              >
+                Renew game
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full"
+                icon={<Home className="h-4 w-4" aria-hidden />}
+                disabled={mutationBusy}
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setConfirmation("abandon");
+                }}
+              >
+                Back to home
+              </Button>
             </div>
 
             <div className="space-y-3">

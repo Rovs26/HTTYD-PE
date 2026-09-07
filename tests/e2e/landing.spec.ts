@@ -26,7 +26,6 @@ test.describe("landing page", () => {
   });
 
   test("offers the teacher a way in, including practice mode", async ({ page }) => {
-    await expect(page.getByPlaceholder(/organizer access code/i)).toBeVisible();
     await expect(page.getByPlaceholder(/host pin/i)).toBeVisible();
     await expect(page.getByRole("checkbox", { name: /practice game/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /create/i })).toBeVisible();

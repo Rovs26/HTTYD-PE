@@ -18,7 +18,6 @@ jobs:
     env:
       AI_PROVIDER: mock
       APP_SECRET: ci-only-secret-not-used-outside-tests
-      GAME_CREATION_ACCESS_CODE: ci-only-access-code
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
 
     steps:

@@ -11,7 +11,6 @@ import { expect, test, type APIRequestContext } from "@playwright/test";
  * Skips itself rather than failing when the environment has no Supabase configured.
  */
 
-const ACCESS_CODE = process.env.GAME_CREATION_ACCESS_CODE ?? "ci-only-access-code";
 const HOST_PIN = "4821";
 
 type Created = { session: { join_code: string }; hostToken: string };
@@ -41,7 +40,6 @@ test.describe("a complete game", () => {
     try {
       created = await post<Created>(request, "/api/games", {
         pin: HOST_PIN,
-        accessCode: ACCESS_CODE,
         // Guarantees no OpenAI spend even if the deployment is pointed at a real key.
         practiceMode: true
       });
@@ -221,11 +219,4 @@ test.describe("a complete game", () => {
     await post(request, `/api/games/${joinCode}/host/abandon`, { hostToken });
   });
 
-  test("rejects game creation without the organizer access code", async ({ request }) => {
-    const response = await request.post("/api/games", {
-      data: { pin: HOST_PIN, accessCode: "definitely-not-the-code" }
-    });
-    // 401 when a code is configured; 503 when the deployment has none set in production.
-    expect([401, 503]).toContain(response.status());
-  });
 });

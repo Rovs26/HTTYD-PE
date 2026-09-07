@@ -20,7 +20,9 @@ npm ci
 cp .env.example .env.local
 ```
 
-2. Fill in `.env.local`. Use a unique random `APP_SECRET` of at least 32 characters and a private `GAME_CREATION_ACCESS_CODE`. The access code is required when a host creates a game, preventing an unauthenticated visitor from triggering OpenAI spend.
+2. Fill in `.env.local`. Use a unique random `APP_SECRET` of at least 32 characters.
+
+   Game creation is deliberately open: there is no access code. On a public deployment that means anyone with the URL can create a game and trigger image generation, so bound the cost with `MAX_IMAGES_PER_GAME` and `MAX_PLAYERS_PER_GAME`, and put the site behind Vercel Deployment Protection if it should not be public.
 
 3. Initialize and link the Supabase CLI, then apply the checked-in migration:
 
@@ -44,7 +46,7 @@ Run all fast checks with `npm run check`; run the browser smoke tests with `npm 
 ## Deploy to Vercel
 
 1. Import this repository as a Next.js project and select Node.js 22.
-2. Add the variables from `.env.example` in Vercel Project Settings. For production, set `NEXT_PUBLIC_APP_URL` to the canonical HTTPS origin, keep `AI_PROVIDER=openai`, and provide `APP_SECRET` plus `GAME_CREATION_ACCESS_CODE` as server-only secrets.
+2. Add the variables from `.env.example` in Vercel Project Settings, scoped to Production. Set `NEXT_PUBLIC_APP_URL` to the canonical HTTPS origin, keep `AI_PROVIDER=openai`, and provide `APP_SECRET` as a server-only secret. Environment variables are snapshotted per deployment, so redeploy after changing one.
 3. Keep `SUPABASE_SERVICE_ROLE_KEY` and `OPENAI_API_KEY` server-only; never rename either with a `NEXT_PUBLIC_` prefix. The app does not use a direct Postgres connection string, so one is not required in Vercel.
 4. Deploy, then verify host creation, student join, image generation, voting, scoring, and Realtime updates from two separate browsers.
 
