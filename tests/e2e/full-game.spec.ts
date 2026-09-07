@@ -187,7 +187,7 @@ test.describe("a complete game", () => {
       (ranking: { round_id: string }) => ranking.round_id === hostState.currentRound.id
     );
     expect(rankings).toHaveLength(students.length);
-    expect(rankings.map((r: { rank: number }) => r.rank).sort((a, b) => a - b)).toEqual(
+    expect(rankings.map((r: { rank: number }) => r.rank).sort((a: number, b: number) => a - b)).toEqual(
       students.map((_, index) => index + 1)
     );
 
