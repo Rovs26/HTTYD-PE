@@ -19,7 +19,7 @@ export function JoinScreen({ joinCode }: { joinCode: string }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [alreadyIn, setAlreadyIn] = useState<number | null>(null);
+  const [roster, setRoster] = useState<string[] | null>(null);
 
   useEffect(() => {
     const existingName = window.localStorage.getItem(playerNameKey(joinCode));
@@ -35,7 +35,11 @@ export function JoinScreen({ joinCode }: { joinCode: string }) {
         if (!response.ok) return;
         const data = await response.json();
         if (!cancelled && Array.isArray(data?.players)) {
-          setAlreadyIn(data.players.length);
+          setRoster(
+            data.players
+              .map((player: { name?: string }) => player?.name)
+              .filter((name: unknown): name is string => typeof name === "string")
+          );
         }
       } catch {
         // A missing count is not worth surfacing — the form still works.
@@ -48,6 +52,12 @@ export function JoinScreen({ joinCode }: { joinCode: string }) {
       window.clearInterval(interval);
     };
   }, [joinCode]);
+
+  const trimmedName = name.trim();
+  const taken = Boolean(
+    trimmedName &&
+      roster?.some((existing) => existing.toLowerCase() === trimmedName.toLowerCase())
+  );
 
   async function join(event: FormEvent) {
     event.preventDefault();
@@ -112,6 +122,12 @@ export function JoinScreen({ joinCode }: { joinCode: string }) {
             required
             className="min-h-16 w-full rounded-[3px] border border-white/20 bg-panel-2 px-4.5 text-[22px] font-semibold text-ink outline-none transition placeholder:text-muted-3 focus:border-fire"
           />
+          {taken && !error ? (
+            <p className="rounded-[3px] border border-danger/50 bg-danger/10 px-4 py-3 text-[15px] font-semibold text-danger">
+              Someone in this game is already called &ldquo;{trimmedName}&rdquo;. Pick something
+              different so the class can tell you apart.
+            </p>
+          ) : null}
           {error ? (
             <p
               id="join-error"
@@ -133,14 +149,31 @@ export function JoinScreen({ joinCode }: { joinCode: string }) {
         </form>
       </div>
 
-      <div className="relative border-t border-line px-5 py-4.5">
-        <p className="font-mono text-[13px] uppercase tracking-[0.1em] text-muted-2">
-          {alreadyIn === null
+      {/* Show who is already in, so nobody picks a name that is taken. */}
+      <div className="relative border-t border-line px-5 py-4">
+        <p className="font-mono text-[12px] uppercase tracking-[0.16em] text-muted-2">
+          {roster === null
             ? "Checking the room…"
-            : alreadyIn === 1
-              ? "1 trainer already in"
-              : `${alreadyIn} trainers already in`}
+            : roster.length === 0
+              ? "Nobody has joined yet — you are first"
+              : `${roster.length} already in`}
         </p>
+        {roster && roster.length > 0 ? (
+          <div className="mt-2.5 flex max-h-32 flex-wrap gap-1.5 overflow-auto" aria-live="polite">
+            {roster.map((existing, index) => (
+              <span
+                key={`${existing}-${index}`}
+                className={
+                  trimmedName && existing.toLowerCase() === trimmedName.toLowerCase()
+                    ? "border border-danger/60 bg-danger/15 px-2.5 py-1 text-[13px] font-bold text-danger"
+                    : "border border-line bg-white/5 px-2.5 py-1 text-[13px] font-semibold text-ink-soft"
+                }
+              >
+                {existing}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
     </main>
   );
