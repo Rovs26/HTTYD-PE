@@ -251,12 +251,12 @@ async function generateChallengeImageFromPrompt(input: {
 }
 
 /**
- * The companion is an extra model call before every image. It is on by default because it
- * measurably improves the prompts, but it doubles the per-image round trips, so it can be
- * switched off with OPENAI_PROMPT_COMPANION=off to halve latency and spend.
+ * The companion rewrites a prompt with a text model before the image is generated. That is
+ * an extra round trip per image — with thirty students, thirty avoidable calls — so it is
+ * OFF by default. Set OPENAI_PROMPT_COMPANION=on if prompt polish matters more than speed.
  */
 function promptCompanionEnabled() {
-  return process.env.OPENAI_PROMPT_COMPANION !== "off";
+  return process.env.OPENAI_PROMPT_COMPANION === "on";
 }
 
 async function refineHostChallengePrompt(

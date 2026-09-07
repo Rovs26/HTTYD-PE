@@ -55,7 +55,7 @@ export function toGameSubmission(submission: PromptSubmission): GamePromptSubmis
 
 export function toGameImage(
   image: GeneratedImage,
-  options: { includeEvaluation?: boolean } = {}
+  options: { includeEvaluation?: boolean; includeDiagnostics?: boolean } = {}
 ): GameGeneratedImage {
   return {
     id: image.id,
@@ -67,7 +67,11 @@ export function toGameImage(
     ai_similarity_score: options.includeEvaluation ? image.ai_similarity_score : null,
     ai_similarity_rationale: options.includeEvaluation
       ? image.ai_similarity_rationale
-      : null
+      : null,
+    // Only the host is told how many attempts an image has burned, or when the current one
+    // was claimed — it is operational detail, not part of the game.
+    generation_attempts: options.includeDiagnostics ? image.generation_attempts : null,
+    generation_started_at: options.includeDiagnostics ? image.generation_started_at : null
   };
 }
 
@@ -161,7 +165,7 @@ export function buildGameStateView(input: {
       currentRound: currentRound ? toGameRound(currentRound) : null,
       submissions: input.submissions.map(toGameSubmission),
       generatedImages: input.generatedImages.map((image) =>
-        toGameImage(image, { includeEvaluation: true })
+        toGameImage(image, { includeEvaluation: true, includeDiagnostics: true })
       ),
       votes: input.votes.map(toGameVote),
       rankings: input.rankings.map(toGameRanking),

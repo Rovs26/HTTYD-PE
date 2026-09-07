@@ -25,6 +25,7 @@ import {
   Toggle,
   WinnersStage
 } from "@/components/host/panels";
+import { GenerationLog } from "@/components/host/generation-log";
 import { PhaseTimer } from "@/components/phase-timer";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
@@ -828,10 +829,18 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                   className="aspect-square w-full border border-line object-cover"
                 />
               ) : (
-                <div className="flex aspect-square w-full items-center justify-center border border-dashed border-line-strong bg-panel text-center">
-                  <p className="px-6 text-[16px] text-muted">
-                    The challenge dragon appears once you start the game.
-                  </p>
+                <div className="relative aspect-square w-full overflow-hidden border border-line">
+                  <img
+                    src="/hero-dragon.jpg"
+                    alt=""
+                    aria-hidden
+                    className="h-full w-full object-cover opacity-25"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
+                    <p className="text-[16px] text-ink-soft">
+                      The challenge dragon appears once you start the game.
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -977,6 +986,16 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                   value={`${scoredImages.length}/${completedImages.length}`}
                 />
               </div>
+
+              {/* Whose image is stuck, and does it need a retry. */}
+              <GenerationLog
+                images={currentImages}
+                players={state?.players ?? []}
+                submittedPlayerIds={currentSubmissions.map((item) => item.player_id)}
+                busy={mutationBusy}
+                onRetry={(imageId) => void retryImage(imageId)}
+                onSkip={(imageId) => void skipImage(imageId)}
+              />
 
               {busy === "generate" || busy === "score" ? (
                 <div

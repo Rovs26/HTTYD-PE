@@ -27,7 +27,18 @@ const jetbrains = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "How to Train Your Dragon: Prompt Engineering",
-  description: "A live classroom AI image generation challenge for learning prompt engineering."
+  description: "A live classroom AI image generation challenge for learning prompt engineering.",
+  openGraph: {
+    title: "How to Train Your Dragon: Prompt Engineering",
+    description:
+      "Thirty students. Three rounds. Everyone writes a prompt against the same dragon, the class votes, and the room reads every prompt afterwards.",
+    images: [{ url: "/og-image.jpg", width: 1536, height: 1024 }],
+    type: "website"
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: ["/og-image.jpg"]
+  }
 };
 
 export default function RootLayout({
