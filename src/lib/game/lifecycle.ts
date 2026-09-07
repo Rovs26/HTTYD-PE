@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { generateChallengeImage } from "@/lib/ai/openai";
 import { partitionImagesForArchive, topRankedPlayerIds } from "@/lib/game/archive";
+import { joinsAsSpectator } from "@/lib/game/join-eligibility";
 import { roundTitle } from "@/lib/game/progression";
 import type { computeRankings } from "@/lib/game/ranking";
 import { recomputeRankings } from "@/lib/game/rounds";
@@ -130,9 +131,16 @@ export async function joinGame(joinCode: string, input: z.infer<typeof joinGameS
 
   await assertPlayerSlotAvailable(session.id);
 
-  // Someone arriving after the game is under way has missed the rounds that decided who is
-  // still in, so they join as a spectator rather than skipping straight into the final.
-  const joinsAsSpectator = session.status === "active";
+  // Students trickle in after the host has already pressed Start, so "the game is active"
+  // is far too aggressive a test for spectator status — it made everyone who scanned the QR
+  // a spectator. Someone is only a spectator once they have genuinely missed their chance to
+  // compete: a later round, or round one after its submissions closed.
+  const round = await getCurrentRound(session);
+  const spectator = joinsAsSpectator({
+    sessionStatus: session.status,
+    currentRoundNumber: session.current_round,
+    round
+  });
   const playerToken = createToken();
 
   const { data, error } = await supabase
@@ -141,7 +149,7 @@ export async function joinGame(joinCode: string, input: z.infer<typeof joinGameS
       game_session_id: session.id,
       name: input.name,
       player_token_hash: hashSecret(playerToken),
-      is_eliminated: joinsAsSpectator
+      is_eliminated: spectator
     })
     .select("*")
     .single();
@@ -154,7 +162,7 @@ export async function joinGame(joinCode: string, input: z.infer<typeof joinGameS
   return {
     player: toGamePlayer(data as Player),
     playerToken,
-    joinedAsSpectator: joinsAsSpectator
+    joinedAsSpectator: spectator
   };
 }
 
