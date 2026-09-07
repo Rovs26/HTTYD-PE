@@ -150,6 +150,9 @@ export type GameGeneratedImage = Pick<
   | "ai_similarity_rationale"
 > & {
   generation_error: string | null;
+  /** Host-only: present on the host projection, null for students. */
+  generation_attempts?: number | null;
+  generation_started_at?: string | null;
 };
 
 export type GameVote = Pick<

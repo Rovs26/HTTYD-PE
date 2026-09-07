@@ -1,4 +1,4 @@
-import { constantTimeEqual, createJoinCode, createToken, hashSecret, verifySecret } from "@/lib/crypto";
+import { createJoinCode, createToken, hashSecret, verifySecret } from "@/lib/crypto";
 import { storagePathsForGameRenewal } from "@/lib/game/archive";
 import { AppError } from "@/lib/http";
 import { log } from "@/lib/logger";
@@ -36,22 +36,6 @@ export function isUniqueViolation(error: unknown) {
   );
 }
 
-export function requireGameCreationAccess(accessCode?: string) {
-  const expected = process.env.GAME_CREATION_ACCESS_CODE;
-  if (!expected) {
-    if (process.env.NODE_ENV === "production") {
-      throw new AppError(
-        "Game creation is unavailable until GAME_CREATION_ACCESS_CODE is configured.",
-        503
-      );
-    }
-    return;
-  }
-
-  if (!constantTimeEqual(accessCode, expected)) {
-    throw new AppError("Game creation access denied.", 401, "access_denied");
-  }
-}
 
 export function assertNotRateLimited(
   key: string,

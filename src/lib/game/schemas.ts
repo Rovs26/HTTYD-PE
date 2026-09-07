@@ -9,7 +9,6 @@ const bearerTokenSchema = z.string().min(16).max(256);
 
 export const createGameSchema = z.object({
   pin: pinSchema,
-  accessCode: z.string().min(1).max(256).optional(),
   // A practice game never calls OpenAI, so it costs nothing to rehearse with.
   practiceMode: z.boolean().optional()
 });

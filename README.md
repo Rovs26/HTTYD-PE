@@ -20,7 +20,9 @@ npm ci
 cp .env.example .env.local
 ```
 
-2. Fill in `.env.local`. Use a unique random `APP_SECRET` of at least 32 characters and a private `GAME_CREATION_ACCESS_CODE`. The access code is required when a host creates a game, preventing an unauthenticated visitor from triggering OpenAI spend.
+2. Fill in `.env.local`. Use a unique random `APP_SECRET` of at least 32 characters.
+
+   Game creation is deliberately open: there is no access code. On a public deployment that means anyone with the URL can create a game and trigger image generation, so bound the cost with `MAX_IMAGES_PER_GAME` and `MAX_PLAYERS_PER_GAME`, and put the site behind Vercel Deployment Protection if it should not be public.
 
 3. Initialize and link the Supabase CLI, then apply the checked-in migration:
 
@@ -44,7 +46,7 @@ Run all fast checks with `npm run check`; run the browser smoke tests with `npm 
 ## Deploy to Vercel
 
 1. Import this repository as a Next.js project and select Node.js 22.
-2. Add the variables from `.env.example` in Vercel Project Settings. For production, set `NEXT_PUBLIC_APP_URL` to the canonical HTTPS origin, keep `AI_PROVIDER=openai`, and provide `APP_SECRET` plus `GAME_CREATION_ACCESS_CODE` as server-only secrets.
+2. Add the variables from `.env.example` in Vercel Project Settings, scoped to Production. Set `NEXT_PUBLIC_APP_URL` to the canonical HTTPS origin, keep `AI_PROVIDER=openai`, and provide `APP_SECRET` as a server-only secret. Environment variables are snapshotted per deployment, so redeploy after changing one.
 3. Keep `SUPABASE_SERVICE_ROLE_KEY` and `OPENAI_API_KEY` server-only; never rename either with a `NEXT_PUBLIC_` prefix. The app does not use a direct Postgres connection string, so one is not required in Vercel.
 4. Deploy, then verify host creation, student join, image generation, voting, scoring, and Realtime updates from two separate browsers.
 
@@ -53,7 +55,7 @@ Rotate any secret that has appeared in chat, screenshots, logs, or source contro
 ## Notes
 
 - Real image generation uses `OPENAI_IMAGE_MODEL`, defaulting to `gpt-image-2`.
-- Image generation defaults to `OPENAI_IMAGE_SIZE=1024x1024`, `OPENAI_IMAGE_OUTPUT_FORMAT=jpeg`, `OPENAI_CHALLENGE_IMAGE_QUALITY=medium`, and `OPENAI_STUDENT_IMAGE_QUALITY=medium`. All generated game images are capped to `low` or `medium`; `high`, `auto`, `hd`, and `standard` are forced down to `medium`.
+- Image generation defaults to `OPENAI_IMAGE_SIZE=1024x1024`, `OPENAI_IMAGE_OUTPUT_FORMAT=jpeg`, and `low` quality for both challenge and student images. Quality is the main speed and cost lever: the Images API only accepts `1024x1024`, `1536x1024`, `1024x1536` or `auto`, so smaller dimensions are not an option. Raise to `medium` if the dragons look too rough.
 - Student image generation first uses `OPENAI_PROMPT_MODEL`, defaulting to `gpt-5.4-mini`, as a prompt companion that merges the base challenge, host round instruction, and student's locked prompt chain before calling the Images API.
 - Host challenge image generation also uses the prompt companion. Round 1 creates the dragon identity, Round 2 adds interaction or background, and Round 3 creates a harder final trial.
 - Clicking `Advance Round` immediately generates the next host challenge image from the previous challenge plus the host's next-round instruction.
@@ -179,3 +181,33 @@ npm run e2e:game    # drives a complete game through the API against the mock pr
 
 `npm run e2e` forces `AI_PROVIDER=mock` for the dev server it starts, so a local browser run
 can never reach a real image model.
+
+## Watching a round happen
+
+Every model call is logged as a single JSON line with its duration, so you can tell whether
+generation is working and where the time goes:
+
+```
+{"level":"info","message":"Student image generated","playerName":"Astrid","roundNumber":1,"ms":8420,"model":"gpt-image-2","quality":"low"}
+```
+
+On Vercel: Project → **Logs**, with the deployment selected. Locally they go to the terminal
+running `npm run dev`. Failures carry a short `requestId` that also appears in the error the
+host sees on screen, so a report of "it broke" can be traced to one line.
+
+The host dashboard shows the same thing without leaving the room: while a batch runs, the
+results panel carries a live counter and every student's tile shows queued / drawing / failed.
+
+## Round escalation
+
+The three rounds deliberately increase in complexity, and round 1 is kept deliberately plain
+so the later rounds have somewhere to go:
+
+| Round | Image |
+| --- | --- |
+| 1 | One dragon, centred portrait, plain backdrop. No environment, no story. |
+| 2 | The same dragon, now placed in a setting. |
+| 3 | The same dragon with action, weather or stakes, and a richer environment. |
+
+The prompt companion is told each round's complexity budget and is explicitly instructed not
+to add detail the round did not ask for.

@@ -34,7 +34,6 @@ import {
   getInternalSession,
   getPlayerByToken,
   publicSession,
-  requireGameCreationAccess,
   requireHost,
   cleanupStaleGames,
   normalizeJoinCode,
@@ -44,7 +43,6 @@ import {
 /** Creating, unlocking, joining, configuring and tearing down a game. */
 
 export async function createGame(input: z.infer<typeof createGameSchema>) {
-  requireGameCreationAccess(input.accessCode);
   assertNotRateLimited("create-game", 10, 10 * 60 * 1000, "Too many games created recently.");
 
   const { session, hostToken } = await createGameSession({

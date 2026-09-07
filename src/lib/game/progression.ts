@@ -22,6 +22,9 @@ export type RoundConfig = {
   defaultInstruction: string | null;
   /** Goal line handed to the image model when building this round's challenge. */
   challengeGoal: string | null;
+  /** How elaborate this round's image should be. Round 1 must stay plain so 2 and 3 have
+   *  somewhere to escalate to. */
+  complexity: string;
   /** Student-facing copy for the prompt box. */
   promptLabel: string;
   promptPlaceholder: string;
@@ -34,9 +37,12 @@ export const ROUNDS: RoundConfig[] = [
     number: 1,
     title: "Round 1: Create Your Dragon",
     cut: { keep: 10, floor: 4, ratio: 0.5 },
+    complexity:
+      "Round 1 is a portrait. One dragon, plain backdrop, no environment and no story. Keep it simple enough to describe in a sentence.",
     defaultInstruction:
       "Train your dragon into a richer scene: add a clear background, interaction, trainer moment, or flight movement while preserving the dragon's identity.",
-    challengeGoal: null,
+    challengeGoal:
+      "Round 1 goal: a single dragon on a plain backdrop. Identity only — no scene, no environment, no narrative.",
     promptLabel: "Write your dragon prompt",
     promptPlaceholder:
       "Describe the dragon, setting, light, mood, camera angle, texture, and style...",
@@ -47,6 +53,8 @@ export const ROUNDS: RoundConfig[] = [
     number: 2,
     title: "Round 2: Train the Scene",
     cut: { keep: 4, floor: 2, ratio: 0.5 },
+    complexity:
+      "Round 2 adds a setting. Keep the same dragon, place it somewhere specific, but keep the composition readable.",
     defaultInstruction:
       "Give your dragon a final training trial: add dynamic action, a difficult environment, story stakes, precise composition, and dramatic lighting while preserving the dragon's identity.",
     challengeGoal:
@@ -61,6 +69,8 @@ export const ROUNDS: RoundConfig[] = [
     title: "Round 3: Final Dragon Trial",
     // No cut: reaching the end of this round ends the game.
     cut: null,
+    complexity:
+      "Round 3 is the hardest. Same dragon, now with action, weather or stakes, and a richer environment.",
     defaultInstruction: null,
     challengeGoal:
       "Round 3 final trial goal: keep the same dragon identity, then add a harder multi-part challenge with action, environment pressure, story stakes, precise composition, and dramatic lighting.",

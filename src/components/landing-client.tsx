@@ -25,7 +25,6 @@ const STEPS = [
 
 export function LandingClient() {
   const router = useRouter();
-  const [accessCode, setAccessCode] = useState("");
   const [pin, setPin] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [practiceMode, setPracticeMode] = useState(false);
@@ -43,7 +42,6 @@ export function LandingClient() {
     setError(null);
     try {
       const data = await requestJson<CreateGameResponse>("/api/games", {
-        accessCode,
         pin,
         practiceMode
       });
@@ -175,20 +173,6 @@ export function LandingClient() {
             </div>
 
             <div className="mt-[18px] flex flex-col gap-2.5">
-              <label htmlFor="accessCode" className="sr-only">
-                Organizer access code
-              </label>
-              <TextField
-                id="accessCode"
-                type="password"
-                autoComplete="off"
-                value={accessCode}
-                onChange={(event) => setAccessCode(event.target.value)}
-                placeholder="Organizer access code"
-                aria-invalid={Boolean(error)}
-                aria-describedby={error ? "landing-error" : undefined}
-                required
-              />
               <label htmlFor="pin" className="sr-only">
                 Host PIN
               </label>

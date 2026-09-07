@@ -5,6 +5,7 @@ import {
   buildStudentImagePrompt
 } from "@/lib/game/prompts";
 import { isProductionRuntime, shouldUseMockAi } from "@/lib/config";
+import { roundConfig } from "@/lib/game/progression";
 import { mockGenerateChallenge, mockGenerateImage, mockScoreSimilarity } from "@/lib/ai/mock";
 import { log } from "@/lib/logger";
 import { uploadDataUrl, uploadImageBase64 } from "@/lib/storage";
@@ -92,14 +93,14 @@ export function cappedImageQuality(
 function challengeImageQuality() {
   return cappedImageQuality(
     process.env.OPENAI_CHALLENGE_IMAGE_QUALITY ?? process.env.OPENAI_IMAGE_QUALITY,
-    "medium"
+    "low"
   );
 }
 
 function studentImageQuality() {
   return cappedImageQuality(
     process.env.OPENAI_STUDENT_IMAGE_QUALITY ?? process.env.OPENAI_IMAGE_QUALITY,
-    "medium"
+    "low"
   );
 }
 
@@ -140,6 +141,7 @@ export async function generateChallengeImage(gameId: string, practiceMode = fals
     gameId,
     prompt: buildBaseDragonPrompt(),
     pathPrefix: "challenge",
+    roundNumber: 1,
     practiceMode
   });
 }
@@ -161,6 +163,7 @@ export async function generateRoundChallengeImage(input: {
     gameId: input.gameId,
     prompt,
     pathPrefix: `round-${input.roundNumber}/challenge`,
+    roundNumber: input.roundNumber,
     practiceMode: input.practiceMode
   });
 }
@@ -169,6 +172,7 @@ async function generateChallengeImageFromPrompt(input: {
   gameId: string;
   prompt: string;
   pathPrefix: string;
+  roundNumber: number;
   practiceMode?: boolean;
 }) {
   // A practice game must never reach OpenAI, whatever the deployment is configured with.
@@ -182,8 +186,13 @@ async function generateChallengeImageFromPrompt(input: {
   }
 
   try {
-    const refinedPrompt = await refineHostChallengePrompt(client, input.prompt);
+    const refinedPrompt = await refineHostChallengePrompt(
+      client,
+      input.prompt,
+      input.roundNumber
+    );
     const outputFormat = imageOutputFormat();
+    const startedAt = Date.now();
     const result = await client.images.generate({
       model: imageModel(),
       prompt: refinedPrompt,
@@ -193,6 +202,14 @@ async function generateChallengeImageFromPrompt(input: {
       output_compression: outputFormat === "png" ? undefined : 86,
       background: "opaque"
     });
+    log.info("Challenge image generated", {
+      roundNumber: input.roundNumber,
+      ms: Date.now() - startedAt,
+      model: imageModel(),
+      quality: challengeImageQuality(),
+      size: imageSize()
+    });
+
     const base64 = result.data?.[0]?.b64_json;
     if (!base64) {
       throw new Error("OpenAI did not return image data.");
@@ -234,18 +251,26 @@ async function generateChallengeImageFromPrompt(input: {
 }
 
 /**
- * The companion is an extra model call before every image. It is on by default because it
- * measurably improves the prompts, but it doubles the per-image round trips, so it can be
- * switched off with OPENAI_PROMPT_COMPANION=off to halve latency and spend.
+ * The companion rewrites a prompt with a text model before the image is generated. That is
+ * an extra round trip per image — with thirty students, thirty avoidable calls — so it is
+ * OFF by default. Set OPENAI_PROMPT_COMPANION=on if prompt polish matters more than speed.
  */
 function promptCompanionEnabled() {
-  return process.env.OPENAI_PROMPT_COMPANION !== "off";
+  return process.env.OPENAI_PROMPT_COMPANION === "on";
 }
 
-async function refineHostChallengePrompt(client: OpenAI, prompt: string) {
+async function refineHostChallengePrompt(
+  client: OpenAI,
+  prompt: string,
+  roundNumber: number
+) {
   if (!promptCompanionEnabled()) {
     return prompt;
   }
+
+  const complexity =
+    roundConfig(roundNumber)?.complexity ??
+    "Keep the image readable and focused on the dragon.";
 
   try {
     const response = await client.responses.create({
@@ -259,12 +284,12 @@ async function refineHostChallengePrompt(client: OpenAI, prompt: string) {
               text: [
                 "You are the Dragon Prompt Companion for a live classroom game.",
                 "Rewrite the supplied challenge context into exactly one image-generation prompt.",
-                "Preserve the dragon identity and previous visual foundation, then clearly apply the new round goal and host instruction.",
-                "For round 2, make the training challenge about interaction, movement, or a stronger background.",
-                "For round 3, make the final trial harder with action, environment pressure, story stakes, precise composition, and dramatic lighting.",
-                "Keep the result semi-realistic, cinematic, fantasy, polished, and classroom-safe.",
+                "Preserve the dragon identity and previous visual foundation, then apply the round goal and host instruction.",
+                complexity,
+                "Do not add detail the round did not ask for. A round 1 image with a landscape, a village or a storm is wrong — the game has nowhere left to escalate to.",
+                "Keep the result semi-realistic, fantasy, and classroom-safe.",
                 "Do not mention the classroom, scoring, voting, prompt engineering, instructions, markdown, or JSON.",
-                "Return only the final prompt text."
+                "Return only the final prompt text, under 80 words."
               ].join("\n")
             }
           ]
@@ -408,6 +433,7 @@ export async function generateStudentImage(input: {
   });
 
   const outputFormat = imageOutputFormat();
+  const startedAt = Date.now();
   const result = await client.images.generate({
     model: imageModel(),
     prompt: refinedPrompt,
@@ -417,6 +443,14 @@ export async function generateStudentImage(input: {
     output_compression: outputFormat === "png" ? undefined : 86,
     background: "opaque"
   });
+  log.info("Student image generated", {
+    playerName: input.playerName,
+    roundNumber: input.roundNumber,
+    ms: Date.now() - startedAt,
+    model: imageModel(),
+    quality: studentImageQuality()
+  });
+
   const base64 = result.data?.[0]?.b64_json;
   if (!base64) {
     throw new Error("OpenAI did not return image data.");

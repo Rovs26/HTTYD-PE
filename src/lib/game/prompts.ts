@@ -74,14 +74,13 @@ export function buildRoundChallengePrompt(input: {
 
 export function buildBaseDragonPrompt() {
   return [
-    "Round 1 challenge: create your own semi-realistic cinematic fantasy dragon for a classroom prompt engineering game.",
-    "Focus on the dragon's identity first: friendly but powerful personality, expressive eyes, layered horns, detailed metallic scales, subtle texture, memorable silhouette, and dramatic wing posture.",
-    "Use only a simple fantasy setting hint such as torchlight, sea mist, carved wood, distant cliffs, or warm golden highlights so the dragon remains the clear subject.",
-    "Use a rich 3D fantasy illustration style with believable depth and lighting, not flat vector art, emoji styling, or simple cartoon shapes.",
-    "Make it visually rich enough that students can create the dragon from prompt details, with no visible text or labels."
+    "A single fantasy dragon, centred portrait, filling most of the frame.",
+    "Show the dragon's identity clearly: head, horns, eyes, scale texture, and wing shape.",
+    "Plain uncluttered backdrop — soft gradient or simple mist. No buildings, no landscape, no crowd, no story.",
+    "Semi-realistic illustration, even lighting, no text or labels.",
+    "Keep it simple. This is the first round and students must be able to describe it in one sentence."
   ].join(" ");
 }
-
 
 /**
  * Visual context for the similarity scorer.

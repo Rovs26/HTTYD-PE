@@ -25,6 +25,7 @@ import {
   Toggle,
   WinnersStage
 } from "@/components/host/panels";
+import { GenerationLog } from "@/components/host/generation-log";
 import { PhaseTimer } from "@/components/phase-timer";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
@@ -828,10 +829,18 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                   className="aspect-square w-full border border-line object-cover"
                 />
               ) : (
-                <div className="flex aspect-square w-full items-center justify-center border border-dashed border-line-strong bg-panel text-center">
-                  <p className="px-6 text-[16px] text-muted">
-                    The challenge dragon appears once you start the game.
-                  </p>
+                <div className="relative aspect-square w-full overflow-hidden border border-line">
+                  <img
+                    src="/hero-dragon.jpg"
+                    alt=""
+                    aria-hidden
+                    className="h-full w-full object-cover opacity-25"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
+                    <p className="text-[16px] text-ink-soft">
+                      The challenge dragon appears once you start the game.
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -978,6 +987,38 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                 />
               </div>
 
+              {/* Whose image is stuck, and does it need a retry. */}
+              <GenerationLog
+                images={currentImages}
+                players={state?.players ?? []}
+                submittedPlayerIds={currentSubmissions.map((item) => item.player_id)}
+                busy={mutationBusy}
+                onRetry={(imageId) => void retryImage(imageId)}
+                onSkip={(imageId) => void skipImage(imageId)}
+              />
+
+              {busy === "generate" || busy === "score" ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="border border-fire/40 bg-fire/[0.08] px-3 py-2"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-mono text-[12px] font-bold uppercase tracking-[0.14em] text-fire">
+                      {busy === "generate" ? "Drawing dragons" : "Scoring"}
+                    </span>
+                    <span className="numeric text-[13px] font-bold text-ink">
+                      {busy === "generate"
+                        ? `${completedImages.length}/${currentSubmissions.length}`
+                        : `${scoredImages.length}/${completedImages.length}`}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-1 w-full overflow-hidden bg-white/10">
+                    <div className="lane-sweep h-full w-1/3 bg-fire" />
+                  </div>
+                </div>
+              ) : null}
+
               <div className="grid min-h-0 flex-1 content-start gap-3 overflow-auto sm:grid-cols-2">
                 {currentImages.map((image) => {
                   const status = image.generation_status;
@@ -1118,53 +1159,16 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
             </Button>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <Button
-              size="sm"
-              variant="ghost"
-              icon={<Settings2 className="h-4 w-4" aria-hidden />}
-              onClick={() => setSettingsOpen(true)}
-            >
-              Settings
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              icon={<Download className="h-4 w-4" aria-hidden />}
-              loading={busy === "export"}
-              disabled={mutationBusy || !currentRound}
-              onClick={() => void exportResults()}
-            >
-              Export
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              icon={<Crown className="h-4 w-4" aria-hidden />}
-              disabled={mutationBusy || !currentRound || state?.session.status === "ended"}
-              onClick={() => void post(`/api/games/${joinCode}/host/action`, { action: "end_game" })}
-            >
-              End game
-            </Button>
-            <Button
-              size="sm"
-              variant="danger"
-              icon={<RefreshCw className="h-4 w-4" aria-hidden />}
-              disabled={mutationBusy}
-              onClick={() => setConfirmation("renew")}
-            >
-              Renew
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              icon={<Home className="h-4 w-4" aria-hidden />}
-              disabled={mutationBusy}
-              onClick={() => setConfirmation("abandon")}
-            >
-              Home
-            </Button>
-          </div>
+          {/* Occasional and destructive actions live in the drawer. The footer holds only
+              what a teacher touches while the game is running. */}
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<Settings2 className="h-4 w-4" aria-hidden />}
+            onClick={() => setSettingsOpen(true)}
+          >
+            Settings
+          </Button>
         </div>
       </footer>
 
@@ -1218,7 +1222,7 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
               <select
                 id="scoringMode"
                 value={scoringMode}
-                disabled={mutationBusy || Boolean(currentRound)}
+                disabled={mutationBusy}
                 onChange={(event) =>
                   void updateScoring(
                     event.target.value as ScoringMode,
@@ -1245,7 +1249,7 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                 max="1"
                 step="0.05"
                 value={voteWeightDraft}
-                disabled={mutationBusy || Boolean(currentRound) || scoringMode !== "blended"}
+                disabled={mutationBusy || scoringMode !== "blended"}
                 aria-valuetext={`${Math.round(voteWeightDraft * 100)}% vote weight`}
                 onChange={(event) => setVoteWeightDraft(Number(event.target.value))}
                 onPointerUp={(event) => void commitVoteWeight(Number(event.currentTarget.value))}
@@ -1255,7 +1259,8 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
               />
               <p className="text-[14px] text-muted">
                 {titleForScoringMode(scoringMode)} · {Math.round(voteWeightDraft * 100)}% vote
-                weight
+                weight. Safe to change mid-game — it only affects the next recompute, so it is
+                the way out if AI scoring stalls.
               </p>
             </div>
 
@@ -1283,6 +1288,56 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
               <p className="text-[14px] text-muted">
                 4 lanes is the recommended balance. 8 may hit rate limits.
               </p>
+            </div>
+
+            <div className="space-y-3 border-t border-line pt-5">
+              <p className="eyebrow">Game</p>
+              <Button
+                variant="ghost"
+                className="w-full"
+                icon={<Download className="h-4 w-4" aria-hidden />}
+                loading={busy === "export"}
+                disabled={mutationBusy || !currentRound}
+                onClick={() => void exportResults()}
+              >
+                Export results
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full"
+                icon={<Crown className="h-4 w-4" aria-hidden />}
+                disabled={mutationBusy || !currentRound || state?.session.status === "ended"}
+                onClick={() => {
+                  setSettingsOpen(false);
+                  void post(`/api/games/${joinCode}/host/action`, { action: "end_game" });
+                }}
+              >
+                End game now
+              </Button>
+              <Button
+                variant="danger"
+                className="w-full"
+                icon={<RefreshCw className="h-4 w-4" aria-hidden />}
+                disabled={mutationBusy}
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setConfirmation("renew");
+                }}
+              >
+                Renew game
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full"
+                icon={<Home className="h-4 w-4" aria-hidden />}
+                disabled={mutationBusy}
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setConfirmation("abandon");
+                }}
+              >
+                Back to home
+              </Button>
             </div>
 
             <div className="space-y-3">

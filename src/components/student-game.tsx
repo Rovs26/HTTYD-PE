@@ -320,7 +320,17 @@ export function StudentGame({ joinCode }: { joinCode: string }) {
                     className="aspect-square w-full border border-line object-cover"
                   />
                 ) : (
-                  <ImagePlaceholder label="challenge image" />
+                  <div className="relative aspect-square w-full overflow-hidden border border-line">
+                    <img
+                      src="/hero-dragon.jpg"
+                      alt=""
+                      aria-hidden
+                      className="h-full w-full object-cover opacity-25"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
+                      <p className="title text-[22px]">Waiting for the host to start</p>
+                    </div>
+                  </div>
                 )}
               </div>
               {currentRound?.additional_instruction ? (
@@ -631,21 +641,6 @@ function ordinal(rank: number) {
   return `${rank}${suffix}`;
 }
 
-function ImagePlaceholder({ label }: { label: string }) {
-  return (
-    <div
-      className="flex aspect-square w-full items-center justify-center border border-line bg-panel"
-      style={{
-        backgroundImage:
-          "repeating-linear-gradient(135deg, rgba(255,255,255,0.05) 0 10px, transparent 10px 20px)"
-      }}
-    >
-      <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-3">
-        {label}
-      </span>
-    </div>
-  );
-}
 
 function GenerationStatus({
   status,
