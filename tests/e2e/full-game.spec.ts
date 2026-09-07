@@ -46,7 +46,14 @@ test.describe("a complete game", () => {
         practiceMode: true
       });
     } catch (error) {
-      test.skip(true, `No usable backend for the full-game test: ${String(error)}`);
+      // Skipping here used to read like success. Say what is actually missing.
+      const reason = String(error);
+      const hint = reason.includes("access denied")
+        ? "GAME_CREATION_ACCESS_CODE does not match the running server"
+        : reason.includes("Supabase")
+          ? "no Supabase credentials configured"
+          : reason;
+      test.skip(true, `Full-game test could not create a game: ${hint}`);
       return;
     }
 
@@ -55,7 +62,9 @@ test.describe("a complete game", () => {
     const hostHeaders = { "x-host-token": hostToken };
 
     // --- students join -------------------------------------------------------------
-    const students = ["Astrid", "Hiccup", "Fishlegs"];
+    // Six, not three: round 1 keeps min(10, max(4, ceil(n/2))) players, so a class of three
+    // sits under the floor and nobody is cut. Six actually exercises elimination.
+    const students = ["Astrid", "Hiccup", "Fishlegs", "Snotlout", "Ruffnut", "Tuffnut"];
     const tokens: string[] = [];
     for (const name of students) {
       const joined = await post<{ playerToken: string; player: { name: string } }>(
@@ -75,7 +84,7 @@ test.describe("a complete game", () => {
 
     let hostState = await state(request, joinCode, hostHeaders);
     expect(hostState.isHost).toBe(true);
-    expect(hostState.players).toHaveLength(3);
+    expect(hostState.players).toHaveLength(students.length);
     expect(hostState.currentRound.round_number).toBe(1);
 
     // The auth transport must work through headers — this is what was broken.
@@ -91,7 +100,9 @@ test.describe("a complete game", () => {
     for (const [index, playerToken] of tokens.entries()) {
       await post(request, `/api/games/${joinCode}/submit`, {
         playerToken,
-        prompt: `A ${["proud", "sleek", "ancient"][index]} dragon on a cliff at golden hour, wings spread, cinematic wide shot.`
+        prompt: `A ${
+          ["proud", "sleek", "ancient", "scarred", "coiled", "storm-lit"][index]
+        } dragon on a cliff at golden hour, wings spread, cinematic wide shot.`
       });
     }
 
@@ -128,7 +139,7 @@ test.describe("a complete game", () => {
     const images = hostState.generatedImages.filter(
       (image: { round_id: string }) => image.round_id === hostState.currentRound.id
     );
-    expect(images).toHaveLength(3);
+    expect(images).toHaveLength(students.length);
     for (const image of images) {
       expect(image.generation_status).toBe("complete");
       expect(image.image_url).toBeTruthy();
@@ -175,15 +186,17 @@ test.describe("a complete game", () => {
     const rankings = hostState.rankings.filter(
       (ranking: { round_id: string }) => ranking.round_id === hostState.currentRound.id
     );
-    expect(rankings).toHaveLength(3);
-    expect(rankings.map((r: { rank: number }) => r.rank).sort()).toEqual([1, 2, 3]);
+    expect(rankings).toHaveLength(students.length);
+    expect(rankings.map((r: { rank: number }) => r.rank).sort((a, b) => a - b)).toEqual(
+      students.map((_, index) => index + 1)
+    );
 
     // Now that the round is scored, students see the standing and each other's prompts.
     const scoredStudentState = await state(request, joinCode, {
       "x-player-token": tokens[0]
     });
     expect(scoredStudentState.rankings.length).toBeGreaterThan(0);
-    expect(scoredStudentState.submissions.length).toBe(3);
+    expect(scoredStudentState.submissions.length).toBe(students.length);
 
     // --- export before anything destructive ----------------------------------------
     const exported = await post<{ rounds: { entries: unknown[] }[] }>(
@@ -191,19 +204,18 @@ test.describe("a complete game", () => {
       `/api/games/${joinCode}/host/export`,
       { hostToken }
     );
-    expect(exported.rounds[0].entries).toHaveLength(3);
+    expect(exported.rounds[0].entries).toHaveLength(students.length);
 
     // --- advance -------------------------------------------------------------------
     await post(request, `/api/games/${joinCode}/host/advance`, { hostToken });
 
     hostState = await state(request, joinCode, hostHeaders);
     expect(hostState.currentRound.round_number).toBe(2);
-    // Three players with a floor of 2 means at least one is eliminated.
+    // Six players in round 1 keeps min(10, max(4, 3)) = 4, so exactly two are cut.
     const stillIn = hostState.players.filter(
       (player: { is_eliminated: boolean }) => !player.is_eliminated
     );
-    expect(stillIn.length).toBeLessThan(3);
-    expect(stillIn.length).toBeGreaterThan(0);
+    expect(stillIn.length).toBe(4);
 
     // --- clean up ------------------------------------------------------------------
     await post(request, `/api/games/${joinCode}/host/abandon`, { hostToken });

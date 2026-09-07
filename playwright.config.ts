@@ -1,4 +1,29 @@
+import { readFileSync } from "node:fs";
 import { defineConfig, devices } from "@playwright/test";
+
+/**
+ * Next loads .env.local into the server process, but Playwright's own process never sees it,
+ * so specs that need a real value (the organizer access code) silently fell back to the CI
+ * placeholder and skipped themselves. Load it here so a local run actually exercises the game.
+ */
+function loadEnvLocal() {
+  try {
+    for (const line of readFileSync(".env.local", "utf8").split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq < 0) continue;
+      const key = trimmed.slice(0, eq).trim();
+      if (process.env[key] === undefined) {
+        process.env[key] = trimmed.slice(eq + 1).trim();
+      }
+    }
+  } catch {
+    // No .env.local (CI): the workflow supplies these directly.
+  }
+}
+
+loadEnvLocal();
 
 export default defineConfig({
   testDir: "./tests/e2e",
