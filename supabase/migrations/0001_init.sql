@@ -145,6 +145,8 @@ alter table public.generated_images enable row level security;
 alter table public.votes enable row level security;
 alter table public.rankings enable row level security;
 
+-- The application reads this bucket name from SUPABASE_IMAGES_BUCKET. If you change that
+-- variable, create the matching bucket too or every image upload will fail.
 insert into storage.buckets (id, name, public)
 values ('dragon-images', 'dragon-images', true)
 on conflict (id) do update set public = excluded.public;

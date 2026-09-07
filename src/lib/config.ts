@@ -25,6 +25,23 @@ export function getSupabaseBrowserKey() {
   );
 }
 
+export function isProductionRuntime() {
+  return process.env.NODE_ENV === "production";
+}
+
 export function shouldUseMockAi() {
-  return process.env.AI_PROVIDER === "mock" || !process.env.OPENAI_API_KEY;
+  if (process.env.AI_PROVIDER === "mock") {
+    return true;
+  }
+
+  if (!process.env.OPENAI_API_KEY) {
+    if (isProductionRuntime()) {
+      throw new Error(
+        "OPENAI_API_KEY is required in production unless AI_PROVIDER=mock is explicitly configured."
+      );
+    }
+    return true;
+  }
+
+  return false;
 }

@@ -2,14 +2,23 @@
   "name": "httyd-prompt-engineering",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "packageManager": "npm@10.8.2",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "check": "npm run lint && npm run typecheck && npm test",
+    "dev:mock": "AI_PROVIDER=mock next dev",
+    "e2e:game": "AI_PROVIDER=mock playwright test tests/e2e/full-game.spec.ts",
+    "check:all": "npm run check && npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.76.1",
@@ -37,6 +46,6 @@
     "jsdom": "^25.0.1",
     "tailwindcss": "^4.1.0",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.11"
   }
 }

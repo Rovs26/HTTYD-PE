@@ -1,7 +1,16 @@
-import { createHmac, randomBytes, timingSafeEqual } from "crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 
 function appSecret() {
-  return process.env.APP_SECRET ?? "development-secret-change-me";
+  const configured = process.env.APP_SECRET;
+  if (configured && (process.env.NODE_ENV !== "production" || configured.length >= 32)) {
+    return configured;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("APP_SECRET must be configured with at least 32 characters.");
+  }
+
+  return "development-secret-change-me";
 }
 
 export function createToken(bytes = 24) {
@@ -33,4 +42,13 @@ export function verifySecret(value: string | null | undefined, expectedHash: str
   }
 
   return timingSafeEqual(actual, expected);
+}
+
+export function constantTimeEqual(
+  value: string | null | undefined,
+  expected: string
+) {
+  const actualDigest = createHash("sha256").update(value ?? "").digest();
+  const expectedDigest = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(actualDigest, expectedDigest);
 }

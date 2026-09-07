@@ -11,9 +11,12 @@ export async function GET(request: Request, context: RouteContext) {
     const url = new URL(request.url);
     return ok(
       await getGameState(joinCode, {
-        hostToken: url.searchParams.get("hostToken"),
-        playerToken: url.searchParams.get("playerToken")
-      })
+        hostToken:
+          request.headers.get("x-host-token") ?? url.searchParams.get("hostToken"),
+        playerToken:
+          request.headers.get("x-player-token") ?? url.searchParams.get("playerToken")
+      }),
+      { headers: { "cache-control": "no-store" } }
     );
   } catch (error) {
     return fail(error);
