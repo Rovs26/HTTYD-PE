@@ -6,7 +6,12 @@ export type RoundStatus =
   | "voting"
   | "scored"
   | "complete";
-export type GenerationStatus = "pending" | "generating" | "complete" | "failed";
+export type GenerationStatus =
+  | "pending"
+  | "generating"
+  | "complete"
+  | "failed"
+  | "skipped";
 export type ScoringMode = "voting_first" | "voting_only" | "ai_only" | "blended";
 
 export type GameSession = {
@@ -17,6 +22,10 @@ export type GameSession = {
   current_round: number;
   scoring_mode: ScoringMode;
   vote_weight: number;
+  audience_voting: boolean;
+  anonymous_voting: boolean;
+  reveal_prompts: boolean;
+  practice_mode: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -42,6 +51,7 @@ export type Round = {
   submission_open: boolean;
   voting_open: boolean;
   status: RoundStatus;
+  phase_ends_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -68,6 +78,9 @@ export type GeneratedImage = {
   image_storage_path: string | null;
   generation_status: GenerationStatus;
   generation_error: string | null;
+  generation_started_at: string | null;
+  generation_attempts: number;
+  scoring_attempts: number;
   ai_similarity_score: number | null;
   ai_similarity_rationale: string | null;
   created_at: string;
@@ -80,6 +93,7 @@ export type Vote = {
   round_id: string;
   voter_player_id: string;
   voted_for_player_id: string;
+  is_audience_vote: boolean;
   created_at: string;
 };
 
@@ -96,16 +110,74 @@ export type Ranking = {
   updated_at: string;
 };
 
+export type GamePlayer = Pick<
+  Player,
+  "id" | "name" | "is_eliminated" | "current_rank"
+>;
+
+export type GameRound = Pick<
+  Round,
+  | "id"
+  | "round_number"
+  | "title"
+  | "challenge_image_url"
+  | "additional_instruction"
+  | "submission_open"
+  | "voting_open"
+  | "status"
+  | "phase_ends_at"
+>;
+
+export type GamePromptSubmission = Pick<
+  PromptSubmission,
+  | "id"
+  | "round_id"
+  | "player_id"
+  | "initial_prompt"
+  | "follow_up_prompt"
+  | "is_locked"
+  | "submitted_at"
+>;
+
+export type GameGeneratedImage = Pick<
+  GeneratedImage,
+  | "id"
+  | "round_id"
+  | "player_id"
+  | "image_url"
+  | "generation_status"
+  | "ai_similarity_score"
+  | "ai_similarity_rationale"
+> & {
+  generation_error: string | null;
+};
+
+export type GameVote = Pick<
+  Vote,
+  "id" | "round_id" | "voter_player_id" | "voted_for_player_id" | "is_audience_vote"
+>;
+
+export type GameRanking = Pick<
+  Ranking,
+  | "id"
+  | "round_id"
+  | "player_id"
+  | "vote_score"
+  | "ai_similarity_score"
+  | "total_score"
+  | "rank"
+>;
+
 export type GameState = {
   session: GameSession;
-  players: Player[];
-  rounds: Round[];
-  currentRound: Round | null;
-  submissions: PromptSubmission[];
-  generatedImages: GeneratedImage[];
-  votes: Vote[];
-  rankings: Ranking[];
-  currentPlayer: Player | null;
+  players: GamePlayer[];
+  rounds: GameRound[];
+  currentRound: GameRound | null;
+  submissions: GamePromptSubmission[];
+  generatedImages: GameGeneratedImage[];
+  votes: GameVote[];
+  rankings: GameRanking[];
+  currentPlayer: GamePlayer | null;
   isHost: boolean;
 };
 

@@ -1,3 +1,4 @@
+import { advancingCount } from "@/lib/game/progression";
 import type {
   GeneratedImage,
   Player,
@@ -105,20 +106,38 @@ export function computeRankings({
   }));
 }
 
-export function nextRoundCutLine(roundNumber: number) {
-  if (roundNumber === 1) {
-    return 10;
-  }
-  if (roundNumber === 2) {
-    return 4;
-  }
-  return 0;
-}
+// Round shape lives in progression.ts; re-exported so existing callers keep one import.
+export { advancingCount, nextRoundCutLine } from "@/lib/game/progression";
 
-export function advancingCount(roundNumber: number, rankedPlayerCount: number) {
-  const cutLine = nextRoundCutLine(roundNumber);
-  if (!cutLine) {
-    return 0;
+
+/**
+ * Players sitting on the exact boundary of the cut with the same total score. Today the tie
+ * is broken silently by submission timestamp, which decides who leaves the game without the
+ * host ever seeing it happen.
+ */
+export function tiedAtCutLine(rankings: ComputedRanking[], roundNumber: number) {
+  const cutLine = advancingCount(roundNumber, rankings.length);
+  if (!cutLine || cutLine >= rankings.length) {
+    return [];
   }
-  return Math.min(cutLine, rankedPlayerCount);
+
+  const ordered = [...rankings].sort((left, right) => left.rank - right.rank);
+  const lastAdvancing = ordered[cutLine - 1];
+  const firstEliminated = ordered[cutLine];
+  if (!lastAdvancing || !firstEliminated) {
+    return [];
+  }
+  // Only a tie the scoring tiebreakers cannot separate is actually decided by submission
+  // time. A pair that differs on votes or AI score is resolved by the comparator, and
+  // warning about it would be noise.
+  const trulyTied = (left: ComputedRanking, right: ComputedRanking) =>
+    left.total_score === right.total_score &&
+    left.vote_score === right.vote_score &&
+    left.ai_similarity_score === right.ai_similarity_score;
+
+  if (!trulyTied(lastAdvancing, firstEliminated)) {
+    return [];
+  }
+
+  return ordered.filter((row) => trulyTied(row, lastAdvancing));
 }

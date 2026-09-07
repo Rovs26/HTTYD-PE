@@ -5,9 +5,11 @@ export default defineConfig({
   timeout: 30_000,
   fullyParallel: true,
   webServer: {
-    command: "npm run dev",
+    command: process.env.CI ? "npm run start" : "npm run dev",
     url: "http://127.0.0.1:3000",
-    reuseExistingServer: true
+    reuseExistingServer: !process.env.CI,
+    // Never let a local e2e run reach a real image model: the suite drives a whole game.
+    env: { AI_PROVIDER: process.env.AI_PROVIDER ?? "mock" }
   },
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000",

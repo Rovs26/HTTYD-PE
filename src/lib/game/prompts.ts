@@ -1,3 +1,4 @@
+import { roundConfig } from "@/lib/game/progression";
 import type { PromptSubmission } from "@/lib/types";
 
 export function cleanPrompt(value: string) {
@@ -57,9 +58,8 @@ export function buildRoundChallengePrompt(input: {
   const basePrompt = cleanPrompt(input.basePrompt);
   const additionalInstruction = cleanPrompt(input.additionalInstruction);
   const roundGoal =
-    input.roundNumber === 2
-      ? "Round 2 training goal: keep the same dragon identity, then add a clear interaction, trainer moment, flight movement, or richer background setting."
-      : "Round 3 final trial goal: keep the same dragon identity, then add a harder multi-part challenge with action, environment pressure, story stakes, precise composition, and dramatic lighting.";
+    roundConfig(input.roundNumber)?.challengeGoal ??
+    "Keep the same dragon identity, then raise the difficulty of the challenge.";
 
   return [
     `Create the evolved host challenge image for round ${input.roundNumber} of a classroom dragon prompt game.`,
@@ -80,4 +80,23 @@ export function buildBaseDragonPrompt() {
     "Use a rich 3D fantasy illustration style with believable depth and lighting, not flat vector art, emoji styling, or simple cartoon shapes.",
     "Make it visually rich enough that students can create the dragon from prompt details, with no visible text or labels."
   ].join(" ");
+}
+
+
+/**
+ * Visual context for the similarity scorer.
+ *
+ * Deliberately excludes the host's `base_prompt`: the scorer is already shown the challenge
+ * image, and its rationale is displayed to students, so putting the host's brief into the
+ * prompt risks the model quoting it back into a student-visible field.
+ */
+export function buildScoringContext(input: {
+  studentPrompt: string;
+  additionalInstruction?: string | null;
+}) {
+  const sections = ["What the student asked for:", cleanPrompt(input.studentPrompt)];
+  if (input.additionalInstruction) {
+    sections.push(`Host instruction for this round:\n${cleanPrompt(input.additionalInstruction)}`);
+  }
+  return sections.join("\n\n");
 }
