@@ -978,6 +978,28 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                 />
               </div>
 
+              {busy === "generate" || busy === "score" ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="border border-fire/40 bg-fire/[0.08] px-3 py-2"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-mono text-[12px] font-bold uppercase tracking-[0.14em] text-fire">
+                      {busy === "generate" ? "Drawing dragons" : "Scoring"}
+                    </span>
+                    <span className="numeric text-[13px] font-bold text-ink">
+                      {busy === "generate"
+                        ? `${completedImages.length}/${currentSubmissions.length}`
+                        : `${scoredImages.length}/${completedImages.length}`}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-1 w-full overflow-hidden bg-white/10">
+                    <div className="lane-sweep h-full w-1/3 bg-fire" />
+                  </div>
+                </div>
+              ) : null}
+
               <div className="grid min-h-0 flex-1 content-start gap-3 overflow-auto sm:grid-cols-2">
                 {currentImages.map((image) => {
                   const status = image.generation_status;

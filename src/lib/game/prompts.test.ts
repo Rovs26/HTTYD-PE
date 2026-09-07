@@ -76,9 +76,12 @@ describe("prompt helpers", () => {
   it("starts the game by asking students to create the dragon identity", () => {
     const prompt = buildBaseDragonPrompt();
 
-    expect(prompt).toContain("Round 1 challenge: create your own");
-    expect(prompt).toContain("Focus on the dragon's identity first");
-    expect(prompt).toContain("simple fantasy setting hint");
+    // Round 1 must stay a plain portrait: the game has nowhere to escalate to if the first
+    // image already carries a landscape and a story.
+    expect(prompt).toMatch(/single fantasy dragon/i);
+    expect(prompt).toMatch(/plain uncluttered backdrop/i);
+    expect(prompt).toMatch(/no buildings, no landscape/i);
+    expect(prompt.length).toBeLessThan(600);
   });
 
   it("builds round 2 as a training scene challenge", () => {
