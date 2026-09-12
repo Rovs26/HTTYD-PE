@@ -17,12 +17,32 @@ import {
 
 /** What a student can do: lock a prompt, and cast a vote. */
 
+/** Postgres rejects anything else for a uuid column, and it rejects it as a server error. */
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * True when a vote target is shaped like something the database can actually look up: either
+ * an opaque "b-" ballot id, or a real uuid.
+ */
+export function isVotableTargetId(candidate: string) {
+  return candidate.startsWith("b-") || UUID_PATTERN.test(candidate);
+}
+
 /**
  * Turns an opaque ballot id back into the player it represents. A plain player id passes
  * through untouched, so this works whether or not the round was anonymous.
  */
 async function resolveBallotId(sessionId: string, roundId: string, candidate: string) {
   if (!candidate.startsWith("b-")) {
+    // The schema has to accept a loose string here, because this field carries either a
+    // player uuid or an opaque "b-" ballot id. Without this check an arbitrary string went
+    // straight into a uuid column, and Postgres raised 22P02 — surfaced to the student as a
+    // 500 "something went wrong" and logged as an unhandled server defect, for what is
+    // really just bad input. Any student could produce it at will.
+    if (!isVotableTargetId(candidate)) {
+      throw new AppError("That image is not available for voting.", 404);
+    }
     return candidate;
   }
 
