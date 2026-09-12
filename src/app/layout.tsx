@@ -26,6 +26,15 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  // Without this, `/og-image.jpg` resolves against http://localhost:3000, so the preview card
+  // for a shared game link is broken everywhere it is pasted. Vercel supplies the deployment
+  // host; NEXT_PUBLIC_APP_URL wins when the game runs on its own domain.
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ??
+      (process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : "http://localhost:3000")
+  ),
   title: "How to Train Your Dragon: Prompt Engineering",
   description: "A live classroom AI image generation challenge for learning prompt engineering.",
   openGraph: {

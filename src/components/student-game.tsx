@@ -22,7 +22,7 @@ import { TextArea } from "@/components/ui/field";
 import { useGameState } from "@/hooks/use-game-state";
 import { requestJson } from "@/lib/client/api";
 import { playerTokenKey } from "@/lib/client/storage";
-import { TOTAL_ROUNDS, roundConfig } from "@/lib/game/progression";
+import { TOTAL_ROUNDS, advancingCount, roundConfig } from "@/lib/game/progression";
 import { formatScore } from "@/lib/utils";
 
 const BANNER_ICON = "h-[18px] w-[18px] shrink-0";
@@ -79,11 +79,25 @@ export function StudentGame({ joinCode }: { joinCode: string }) {
   const isEliminated = Boolean(currentPlayer?.is_eliminated);
   const isActive = Boolean(currentPlayer && !isEliminated);
   const audienceVoting = Boolean(state?.session.audience_voting);
-  const canVote = Boolean(currentRound?.voting_open) && (isActive || audienceVoting);
   const resultsVisible = rankings.length > 0;
   const hasCompeted = Boolean(
     state?.submissions.some((submission) => submission.player_id === currentPlayer?.id)
   );
+  // An audience ballot is only accepted from someone who competed in an earlier round —
+  // otherwise anyone could rejoin repeatedly and stuff the vote. The server has always
+  // enforced that; showing the buttons anyway meant a spectator tapped one and got a 403.
+  const canVote =
+    Boolean(currentRound?.voting_open) && (isActive || (audienceVoting && hasCompeted));
+  // Elimination is only written to the player row when the host advances the round, so
+  // `is_eliminated` is still false for everybody while the results are on screen. Telling
+  // every survivor "you advance" there promised a place to students who were about to be
+  // cut. The cut line is knowable from the ranking, so use that instead.
+  const survivorCount = currentRound
+    ? advancingCount(currentRound.round_number, rankings.length)
+    : 0;
+  const advanced =
+    !isEliminated && Boolean(myRanking) && myRanking!.rank <= survivorCount;
+
   const nameFor = (playerId: string) =>
     state?.players.find((item) => item.id === playerId)?.name ?? "Trainer";
 
@@ -99,7 +113,7 @@ export function StudentGame({ joinCode }: { joinCode: string }) {
           tone: "gold",
           icon: <Trophy className={BANNER_ICON} aria-hidden />,
           text: myRanking
-            ? `You placed ${ordinal(myRanking.rank)}${isEliminated ? "" : " — you advance"}`
+            ? `You placed ${ordinal(myRanking.rank)}${advanced ? " — you advance" : ""}`
             : "Round results are in"
         }
       : currentRound?.voting_open
@@ -453,11 +467,10 @@ export function StudentGame({ joinCode }: { joinCode: string }) {
                     />
                     <div className="grid grid-cols-3 gap-px border border-line border-t-0 bg-line">
                       <StatTile
-                        value={String(
-                          state?.votes.filter(
-                            (v) => v.voted_for_player_id === currentPlayer.id
-                          ).length ?? 0
-                        )}
+                        // A student is only ever sent their own ballot, so counting
+                        // `state.votes` here always produced 0 — next to a leaderboard
+                        // that said otherwise. The ranking carries the real tally.
+                        value={myRanking ? String(myRanking.vote_score) : "—"}
                         label="Votes"
                         tone="fire"
                       />
