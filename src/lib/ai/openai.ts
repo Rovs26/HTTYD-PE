@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { resolveImageSize } from "@/lib/ai/image-size";
 import {
   buildBaseDragonPrompt,
   buildRoundChallengePrompt,
@@ -53,16 +54,7 @@ function imageModel() {
 }
 
 function imageSize() {
-  const value = process.env.OPENAI_IMAGE_SIZE;
-  if (
-    value === "1024x1024" ||
-    value === "1536x1024" ||
-    value === "1024x1536" ||
-    value === "auto"
-  ) {
-    return value;
-  }
-  return "1024x1024";
+  return resolveImageSize(imageModel(), process.env.OPENAI_IMAGE_SIZE);
 }
 
 type ImageQuality = "standard" | "hd" | "low" | "medium" | "high" | "auto";
