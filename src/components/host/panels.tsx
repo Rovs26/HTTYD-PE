@@ -2,6 +2,7 @@
 
 import { AlertTriangle, Crown, Download, ImageIcon, PlusCircle } from "lucide-react";
 import { useEffect } from "react";
+import { useModalDialog } from "@/hooks/use-modal-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatScore } from "@/lib/utils";
@@ -254,7 +255,7 @@ export function RevealStage({
       <div className="relative flex flex-wrap items-end justify-between gap-8 border-t border-white/[0.12] bg-ground-2 px-8 pt-7 pb-6 lg:px-14">
         <div className="min-w-0">
           <p className="font-mono text-[14px] uppercase tracking-[0.22em] text-sea">Trainer</p>
-          <p className="title mt-1.5 truncate text-[clamp(48px,8vw,104px)] leading-[0.9]">
+          <p className="title title-display mt-1.5 truncate text-[clamp(48px,8vw,104px)]">
             {nameFor(image.player_id)}
           </p>
         </div>
@@ -387,7 +388,7 @@ export function WinnersStage({
       <div className="relative grid min-h-0 flex-1 gap-12 px-8 pt-7 lg:grid-cols-[1fr_620px] lg:px-14">
         <div className="flex min-h-0 flex-col">
           <p className="title text-[36px] text-gold">Champion</p>
-          <p className="title mt-2 text-[clamp(48px,7vw,88px)] leading-[0.92]">
+          <p className="title title-display mt-2 text-[clamp(48px,7vw,88px)]">
             {champion ? nameFor(champion.player_id) : "TBD"}
           </p>
 
@@ -531,8 +532,12 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onExport?: () => void;
 }) {
+  const dialogRef = useModalDialog(true, onCancel);
+
   return (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       className="fixed inset-0 z-50 flex items-center justify-center bg-[color:var(--scrim)] px-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
@@ -627,8 +632,10 @@ export function Toggle({
 export function Metric({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="border border-line bg-panel-2 px-2 py-3 text-center">
-      <p className="numeric text-[24px] font-extrabold leading-none text-ink">{value}</p>
-      <p className="mt-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
+      <p className="numeric text-[32px] font-extrabold leading-none text-ink">{value}</p>
+      {/* This label was 11px on a projected screen: the room could see that a number was "4"
+          but not what it counted, which is the half that carries the meaning. */}
+      <p className="mt-1.5 font-mono text-[15px] uppercase tracking-[0.1em] text-muted">
         {label}
       </p>
     </div>

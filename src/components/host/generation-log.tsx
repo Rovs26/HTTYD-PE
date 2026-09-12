@@ -15,14 +15,15 @@ export function GenerationLog({
   images,
   players,
   submittedPlayerIds,
-  busy,
+  recoveringImageId,
   onRetry,
   onSkip
 }: {
   images: GameGeneratedImage[];
   players: GamePlayer[];
   submittedPlayerIds: string[];
-  busy: boolean;
+  /** Only the row being recovered is busy — a running batch no longer freezes the others. */
+  recoveringImageId: string | null;
   onRetry: (imageId: string) => void;
   onSkip: (imageId: string) => void;
 }) {
@@ -90,13 +91,20 @@ export function GenerationLog({
               {nameFor(playerId)}
             </span>
 
+            {/*
+             * --fire and --danger sit 1.26:1 apart, so "drawing" and "failed" — the two states
+             * this log exists to tell apart — were the same colour from the back of a room.
+             * Failure is now a solid filled chip against outlines, so the difference survives
+             * distance, projector gamma and colour-blindness.
+             */}
             <span
               className={cn(
-                "numeric shrink-0 text-[12px] font-bold uppercase tracking-[0.1em]",
-                status === "complete" && "text-sea",
-                status === "generating" && "text-fire",
-                status === "failed" && "text-danger",
-                (status === "pending" || status === "skipped") && "text-muted-2"
+                "numeric shrink-0 border px-1.5 py-0.5 text-[12px] font-bold uppercase tracking-[0.1em]",
+                status === "complete" && "border-sea/50 text-sea",
+                status === "generating" && "border-fire/60 text-fire",
+                status === "failed" && "border-danger bg-danger text-ground",
+                (status === "pending" || status === "skipped") &&
+                  "border-line-strong text-muted-2"
               )}
             >
               {status === "generating" && elapsed !== null
@@ -115,12 +123,26 @@ export function GenerationLog({
               </span>
             ) : null}
 
+            {/* Retry is only meaningful once a job has stopped — offering it mid-flight meant
+                the press was silently swallowed by the worker already holding the row. */}
             {needsAttention && image ? (
               <span className="flex shrink-0 gap-1.5">
-                <Button size="sm" variant="secondary" disabled={busy} onClick={() => onRetry(image.id)}>
-                  Retry
-                </Button>
-                <Button size="sm" variant="ghost" disabled={busy} onClick={() => onSkip(image.id)}>
+                {status !== "generating" ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={recoveringImageId === image.id}
+                    onClick={() => onRetry(image.id)}
+                  >
+                    Retry
+                  </Button>
+                ) : null}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={recoveringImageId === image.id}
+                  onClick={() => onSkip(image.id)}
+                >
                   Skip
                 </Button>
               </span>

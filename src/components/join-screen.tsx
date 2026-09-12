@@ -94,7 +94,7 @@ export function JoinScreen({ joinCode }: { joinCode: string }) {
           <p className="font-mono text-[13px] uppercase tracking-[0.24em] text-sea">
             Game {joinCode}
           </p>
-          <h1 className="title mt-3 text-[clamp(44px,13vw,64px)] leading-[0.94]">
+          <h1 className="title title-display mt-3 text-[clamp(44px,13vw,64px)]">
             Enter the arena
           </h1>
           <p className="mt-3.5 text-[18px] leading-relaxed text-ink-soft">

@@ -82,7 +82,7 @@ export function LandingClient() {
             <p className="font-mono text-[13px] uppercase tracking-[0.26em] text-sea sm:text-[14px]">
               A live classroom prompt-writing arena
             </p>
-            <h1 className="title mt-3.5 text-[clamp(52px,11vw,104px)] leading-[0.9] text-ink">
+            <h1 className="title title-display mt-3.5 text-[clamp(52px,11vw,104px)] text-ink">
               How to train
               <br />
               your dragon
