@@ -401,3 +401,48 @@ describe("anonymous voting hides the identity, not just the name", () => {
     expect(masked.players.map((item) => item.id)).not.toContain("c");
   });
 });
+
+describe("buildGameStateView — round progress", () => {
+  // A student receives only their own image, so counting their payload always said "1".
+  // This aggregate is what lets them tell a long wait from a stuck one.
+  const pending: GeneratedImage = {
+    ...generatedImage("b"),
+    generation_status: "pending",
+    image_url: null
+  };
+
+  function viewWith(images: GeneratedImage[], isHost: boolean) {
+    return buildGameStateView({
+      session,
+      players,
+      rounds: [round("generating", false)],
+      submissions,
+      generatedImages: images,
+      votes,
+      rankings: [],
+      currentPlayer: players[0],
+      isHost
+    });
+  }
+
+  it("counts the whole round, not just the images the student can see", () => {
+    const view = viewWith([generatedImage("a"), pending], false);
+    expect(view.roundProgress).toEqual({ drawn: 1, total: 2 });
+    // The student still only receives their own image.
+    expect(view.generatedImages).toHaveLength(1);
+  });
+
+  it("reports the same progress to the host", () => {
+    const view = viewWith([generatedImage("a"), pending], true);
+    expect(view.roundProgress).toEqual({ drawn: 1, total: 2 });
+  });
+
+  it("is zeroed when the round has no images yet", () => {
+    expect(viewWith([], false).roundProgress).toEqual({ drawn: 0, total: 0 });
+  });
+
+  it("carries no player identities", () => {
+    const view = viewWith([generatedImage("a"), pending], false);
+    expect(Object.keys(view.roundProgress).sort()).toEqual(["drawn", "total"]);
+  });
+});

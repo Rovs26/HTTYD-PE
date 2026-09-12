@@ -171,6 +171,17 @@ export type GameRanking = Pick<
   | "rank"
 >;
 
+/**
+ * How far the current round's image generation has got, class-wide.
+ *
+ * A student is only ever sent their own image, so they could not tell a minutes-long wait
+ * from a stuck one. These two counts are aggregates over the whole round and name nobody.
+ */
+export type RoundProgress = {
+  drawn: number;
+  total: number;
+};
+
 export type GameState = {
   session: GameSession;
   players: GamePlayer[];
@@ -182,6 +193,7 @@ export type GameState = {
   rankings: GameRanking[];
   currentPlayer: GamePlayer | null;
   isHost: boolean;
+  roundProgress: RoundProgress;
 };
 
 export type PublicGameState = Omit<GameState, "submissions"> & {

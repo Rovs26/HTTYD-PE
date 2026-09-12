@@ -31,6 +31,7 @@ import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
 import { TextArea, TextField } from "@/components/ui/field";
 import { useGameState } from "@/hooks/use-game-state";
+import { useModalDialog } from "@/hooks/use-modal-dialog";
 import { useRoundGating } from "@/hooks/use-round-gating";
 import { requestJson } from "@/lib/client/api";
 import { hostTokenKey } from "@/lib/client/storage";
@@ -60,7 +61,7 @@ type AbandonGameResponse = {
   cleanup: { deletedGameCount: number; removedStorageObjectCount: number };
 };
 
-type ConfirmationAction = "renew" | "abandon" | "advance";
+type ConfirmationAction = "renew" | "abandon" | "advance" | "end_game" | "remove_player";
 
 // Parallel lanes for the generation queue. Four collapses a 25-student round from ~15
 // minutes to ~4 while staying clear of OpenAI image rate limits.
@@ -86,6 +87,18 @@ const CONFIRMATIONS: Record<
     title: "Advance the round?",
     body: "Advancing eliminates everyone below the cut line. This cannot be undone.",
     confirmLabel: "Advance round"
+  },
+  // The most destructive control on the dashboard used to fire on a single click, while
+  // removing one student asked for confirmation — the guard was on the wrong action.
+  end_game: {
+    title: "End the game now?",
+    body: "This stops the game for everyone immediately and shows the final standings. The remaining rounds will not be played, and this cannot be undone.",
+    confirmLabel: "End game now"
+  },
+  remove_player: {
+    title: "Remove this trainer?",
+    body: "Their prompts, images and votes are removed with them. They can rejoin with the join code if submissions are still open.",
+    confirmLabel: "Remove trainer"
   }
 };
 
@@ -101,6 +114,11 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
   const [origin, setOrigin] = useState("");
   const [nextInstruction, setNextInstruction] = useState("");
   const [confirmation, setConfirmation] = useState<ConfirmationAction | null>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<{
+    playerId: string;
+    name: string;
+  } | null>(null);
+  const [recoveringImage, setRecoveringImage] = useState<string | null>(null);
   const [voteWeightDraft, setVoteWeightDraft] = useState(0.5);
   const [generationConcurrency, setGenerationConcurrency] = useState(
     DEFAULT_GENERATION_CONCURRENCY
@@ -109,6 +127,10 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
   const [revealIndex, setRevealIndex] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const mutationLock = useRef(false);
+
+  // The drawer announced itself as modal without behaving like one: Escape did nothing and
+  // Tab walked out into the dashboard behind it.
+  const settingsDialogRef = useModalDialog(settingsOpen, () => setSettingsOpen(false));
 
   useEffect(() => {
     setHostToken(window.localStorage.getItem(hostTokenKey(joinCode)));
@@ -313,11 +335,19 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
     await post(`/api/games/${joinCode}/host/rename-player`, { playerId, name: trimmed });
   }
 
-  async function confirmRemovePlayer(playerId: string, name: string) {
-    if (!window.confirm(`Remove ${name} from the game? Their prompts and images go too.`)) {
-      return;
-    }
-    await post(`/api/games/${joinCode}/host/remove-player`, { playerId });
+  // A native confirm() is an OS dialog in the system theme, thrown onto a dark projected
+  // stage. Route it through the same in-app dialog as every other destructive action.
+  function confirmRemovePlayer(playerId: string, name: string) {
+    setPendingRemoval({ playerId, name });
+    setConfirmation("remove_player");
+  }
+
+  async function removePendingPlayer() {
+    if (!pendingRemoval) return;
+    await post(`/api/games/${joinCode}/host/remove-player`, {
+      playerId: pendingRemoval.playerId
+    });
+    setPendingRemoval(null);
   }
 
   async function openAdvanceConfirmation() {
@@ -363,12 +393,27 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
     await post(`/api/games/${joinCode}/host/timer`, { seconds });
   }
 
-  async function retryImage(imageId: string) {
-    await post(`/api/games/${joinCode}/host/retry-image`, { imageId });
-  }
-
-  async function skipImage(imageId: string) {
-    await post(`/api/games/${joinCode}/host/skip-image`, { imageId });
+  /**
+   * Per-image recovery, deliberately outside the mutation lock.
+   *
+   * A generate or score batch holds that lock for its whole duration — minutes for a full
+   * class — and Retry and Skip were disabled for all of it. That is precisely the window they
+   * exist for: the host watches one student's image fail and can do nothing until every other
+   * image finishes. These act on a single row, and the server claims jobs with
+   * FOR UPDATE SKIP LOCKED, so they cannot collide with a running batch.
+   */
+  async function recoverImage(kind: "retry-image" | "skip-image", imageId: string) {
+    if (!hostToken || recoveringImage) return;
+    setRecoveringImage(imageId);
+    setError(null);
+    try {
+      await requestJson(`/api/games/${joinCode}/host/${kind}`, { hostToken, imageId });
+      await reload();
+    } catch (recoverError) {
+      setError(recoverError instanceof Error ? recoverError.message : "Action failed");
+    } finally {
+      setRecoveringImage(null);
+    }
   }
 
   async function updateScoring(scoringMode: ScoringMode, voteWeight: number) {
@@ -715,9 +760,10 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
           <div className="flex shrink-0 items-center gap-7">
             <PhaseTimer endsAt={currentRound?.phase_ends_at ?? null} size="lg" />
             <div className="flex flex-col items-end gap-2">
-              <StatusPill tone="gold">{joinCode}</StatusPill>
+              <StatusPill tone="neutral">{joinCode}</StatusPill>
+              {/* Gold is reserved for rank and winner. Sea is the state colour. */}
               {state?.session.practice_mode ? (
-                <StatusPill tone="gold">Practice · no spend</StatusPill>
+                <StatusPill tone="sea">Practice · no spend</StatusPill>
               ) : null}
               <StatusPill
                 tone={currentRound?.voting_open || currentRound?.submission_open ? "fire" : "neutral"}
@@ -821,7 +867,7 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
           <div className="grid gap-px bg-white/10 lg:h-full lg:grid-cols-[520px_1fr_560px]">
             {/* -------- left: the challenge -------- */}
             <div className="flex min-h-0 flex-col gap-5 bg-ground p-7">
-              <p className="eyebrow">The challenge</p>
+              <p className="eyebrow-stage">The challenge</p>
               {currentRound?.challenge_image_url ? (
                 <img
                   src={currentRound.challenge_image_url}
@@ -851,10 +897,14 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
               </div>
 
               <div className="border border-line bg-panel-2 p-4">
-                <p className="font-mono text-[12px] uppercase tracking-[0.2em] text-sea">
-                  Join at
+                <p className="eyebrow-stage">Join at</p>
+                {/* Students can join through round one, so a latecomer reads this from the
+                    back of the room. It was 15px with `break-all`, which splits the host
+                    name at arbitrary characters — the worst treatment for a string being
+                    transcribed across a classroom. */}
+                <p className="numeric mt-1 break-words text-[clamp(20px,1.5vw,28px)] leading-[1.25] text-ink-2">
+                  {joinUrl.replace(/^https?:\/\/(www\.)?/, "")}
                 </p>
-                <p className="numeric mt-1 break-all text-[15px] text-ink-2">{joinUrl}</p>
                 <p className="numeric mt-3 text-[40px] font-extrabold leading-none tracking-[0.06em] text-fire">
                   {joinCode}
                 </p>
@@ -865,7 +915,7 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
             <div className="flex min-h-0 flex-col gap-4.5 bg-ground p-7">
               <div className="flex items-end justify-between gap-5">
                 <div>
-                  <p className="eyebrow">The room</p>
+                  <p className="eyebrow-stage">The room</p>
                   <p className="numeric mt-1 text-[30px] font-extrabold leading-none">
                     {currentSubmissions.length}
                     <span className="text-dim"> / {activePlayers.length}</span>
@@ -909,10 +959,24 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                       key={player.id}
                       className="group flex items-center gap-2.5 border border-line bg-panel-2 px-3 py-2"
                     >
+                      {/* State was a 10px colour-only square, aria-hidden, explained by a
+                          legend at the far bottom of the panel. It now says what it means,
+                          in the row, where the mapping needs no legend. */}
                       <span
-                        aria-hidden
-                        className={`h-2.5 w-2.5 shrink-0 ${marked ? "bg-fire" : "bg-white/15"}`}
-                      />
+                        className={`shrink-0 border px-1.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.1em] ${
+                          marked
+                            ? "border-fire bg-fire text-ground"
+                            : "border-line-strong text-muted-2"
+                        }`}
+                      >
+                        {currentRound?.voting_open
+                          ? marked
+                            ? "voted"
+                            : "no vote"
+                          : marked
+                            ? "in"
+                            : "waiting"}
+                      </span>
                       <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
                         {player.name}
                       </span>
@@ -925,20 +989,25 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                           #{player.current_rank}
                         </span>
                       ) : null}
-                      <span className="hidden shrink-0 gap-1 group-hover:flex group-focus-within:flex">
+                      {/* These were `hidden` until hover. Tailwind's `hidden` is display:none,
+                          and a display:none element cannot take focus — so the
+                          group-focus-within fallback could never fire and there was no
+                          keyboard or touch route to either control. Weight recedes them
+                          instead, which keeps them reachable on a teacher's iPad. */}
+                      <span className="flex shrink-0 gap-1 opacity-55 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                         <button
                           type="button"
                           disabled={mutationBusy}
                           onClick={() => void promptRename(player.id, player.name)}
-                          className="px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-sea hover:bg-white/10 disabled:opacity-40"
+                          className="px-2 py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-sea hover:bg-white/10 disabled:opacity-40"
                         >
                           Rename
                         </button>
                         <button
                           type="button"
                           disabled={mutationBusy}
-                          onClick={() => void confirmRemovePlayer(player.id, player.name)}
-                          className="px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-danger hover:bg-white/10 disabled:opacity-40"
+                          onClick={() => confirmRemovePlayer(player.id, player.name)}
+                          className="px-2 py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-danger hover:bg-white/10 disabled:opacity-40"
                         >
                           Remove
                         </button>
@@ -953,16 +1022,12 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                 ) : null}
               </div>
 
-              <p className="font-mono text-[12px] uppercase tracking-[0.14em] text-muted-3">
-                Filled square = {currentRound?.voting_open ? "voted" : "prompt locked"} · hover a
-                row to rename or remove
-              </p>
             </div>
 
             {/* -------- right: results -------- */}
             <div className="flex min-h-0 flex-col gap-4.5 bg-ground p-7">
               <div className="flex items-end justify-between gap-4">
-                <p className="eyebrow">Results</p>
+                <p className="eyebrow-stage">Results</p>
                 {blockedImages.length ? (
                   <StatusPill tone="danger">{blockedImages.length} need attention</StatusPill>
                 ) : null}
@@ -992,9 +1057,9 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                 images={currentImages}
                 players={state?.players ?? []}
                 submittedPlayerIds={currentSubmissions.map((item) => item.player_id)}
-                busy={mutationBusy}
-                onRetry={(imageId) => void retryImage(imageId)}
-                onSkip={(imageId) => void skipImage(imageId)}
+                recoveringImageId={recoveringImage}
+                onRetry={(imageId) => void recoverImage("retry-image", imageId)}
+                onSkip={(imageId) => void recoverImage("skip-image", imageId)}
               />
 
               {busy === "generate" || busy === "score" ? (
@@ -1081,16 +1146,16 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                             <Button
                               size="sm"
                               variant="secondary"
-                              disabled={mutationBusy}
-                              onClick={() => void retryImage(image.id)}
+                              disabled={recoveringImage === image.id}
+                              onClick={() => void recoverImage("retry-image", image.id)}
                             >
                               Retry
                             </Button>
                             <Button
                               size="sm"
                               variant="ghost"
-                              disabled={mutationBusy}
-                              onClick={() => void skipImage(image.id)}
+                              disabled={recoveringImage === image.id}
+                              onClick={() => void recoverImage("skip-image", image.id)}
                             >
                               Skip
                             </Button>
@@ -1175,6 +1240,8 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
       {/* --------------------------------------------------------- drawer */}
       {settingsOpen ? (
         <div
+          ref={settingsDialogRef}
+          tabIndex={-1}
           className="fixed inset-0 z-40 flex justify-end bg-[color:var(--scrim)]"
           role="dialog"
           aria-modal="true"
@@ -1303,13 +1370,13 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
                 Export results
               </Button>
               <Button
-                variant="ghost"
+                variant="danger"
                 className="w-full"
                 icon={<Crown className="h-4 w-4" aria-hidden />}
                 disabled={mutationBusy || !currentRound || state?.session.status === "ended"}
                 onClick={() => {
                   setSettingsOpen(false);
-                  void post(`/api/games/${joinCode}/host/action`, { action: "end_game" });
+                  setConfirmation("end_game");
                 }}
               >
                 End game now
@@ -1378,22 +1445,39 @@ export function HostDashboard({ joinCode }: { joinCode: string }) {
       {confirmationCopy ? (
         <ConfirmDialog
           title={confirmationCopy.title}
-          body={confirmationCopy.body}
+          body={
+            confirmation === "remove_player" && pendingRemoval
+              ? `${pendingRemoval.name} will be removed. ${confirmationCopy.body}`
+              : confirmationCopy.body
+          }
           confirmLabel={confirmationCopy.confirmLabel}
           loading={busy === confirmationBusyKey}
           detail={confirmation === "advance" ? advanceDetail : null}
           onExport={
-            confirmation === "renew" || confirmation === "abandon"
+            confirmation === "renew" ||
+            confirmation === "abandon" ||
+            confirmation === "end_game"
               ? () => void exportResults()
               : undefined
           }
-          onCancel={() => setConfirmation(null)}
+          onCancel={() => {
+            setConfirmation(null);
+            setPendingRemoval(null);
+          }}
           onConfirm={() => {
             if (confirmation === "renew") void renewGame();
             if (confirmation === "abandon") void abandonGame();
             if (confirmation === "advance") {
               setConfirmation(null);
               void advance();
+            }
+            if (confirmation === "end_game") {
+              setConfirmation(null);
+              void post(`/api/games/${joinCode}/host/action`, { action: "end_game" });
+            }
+            if (confirmation === "remove_player") {
+              setConfirmation(null);
+              void removePendingPlayer();
             }
           }}
         />

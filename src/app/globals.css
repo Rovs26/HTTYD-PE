@@ -22,7 +22,9 @@
   --muted: #a9b3c0;
   --muted-2: #8f9bab;
   --muted-3: #7f8b9b;
-  --dim: #5b6675;
+  /* Was #5b6675, which measured 3.13:1 on --panel — below AA for the placeholder text and
+   * count denominators it is used for. #757f90 is the nearest value that clears 4.5:1. */
+  --dim: #757f90;
 
   --fire: #ff6a2b;
   --fire-soft: #ffb489;
@@ -40,6 +42,12 @@
   /* Only two radii exist in this design: near-square, or a full pill. */
   --radius: 3px;
   --radius-pill: 9999px;
+
+  /*
+   * Native controls follow this. Without it the <select> popups in the host settings drawer
+   * open as white system rectangles on a near-black stage, in front of the class.
+   */
+  color-scheme: dark;
 }
 
 /* Expose the tokens to Tailwind v4 utilities (bg-fire, text-sea, border-line, ...). */
@@ -110,17 +118,43 @@ select {
   line-height: 1;
 }
 
+/*
+ * Tracking is size-specific: condensed uppercase reads too loose as it grows, so display sizes
+ * want it pulled negative. `.title` alone was carrying everything from 18px to 104px on one
+ * value, which is why several callsites had grown their own leading patches.
+ */
+.title-display {
+  letter-spacing: -0.02em;
+  line-height: 0.92;
+}
+
 /* Codes, timers, scores, ranks and eyebrow labels. Tabular so digits stop jittering. */
 .numeric {
   font-family: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * Section labels. There are two, because there are two viewing distances: a phone at 30cm and
+ * a projector read from the back of a classroom. One 12px class was serving both, which made
+ * the host's labels decorative — the room could see that a number was "4" but not what it
+ * counted. Sizes are in rem so a raised system text size scales them.
+ */
 .eyebrow {
   font-family: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--sea);
+}
+
+/* Anything the room reads, not just the operator. */
+.eyebrow-stage {
+  font-family: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
+  font-size: clamp(1rem, 1.05vw, 1.375rem);
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--sea);
 }
@@ -170,10 +204,61 @@ select {
   animation: lanesweep 1.6s linear infinite;
 }
 
+/*
+ * Reduced motion means a gentler signal, not a missing one. Stopping `lane-sweep` used to
+ * leave a student staring at an empty track with no way to tell whether anything was
+ * happening — so the bar fills its track instead and the accompanying text carries progress.
+ */
 @media (prefers-reduced-motion: reduce) {
   .ember-pulse,
-  .lane-sweep {
+  .lane-sweep,
+  .animate-spin,
+  .animate-pulse {
     animation: none;
+  }
+
+  .lane-sweep {
+    width: 100%;
+    transform: none;
+    opacity: 0.5;
+  }
+
+  .animate-pulse {
+    opacity: 0.6;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/*
+ * Structure here is carried by alpha hairlines, which are the first thing a washed-out
+ * projector loses. Raising them serves high-contrast users and a bad projector equally.
+ */
+@media (prefers-contrast: more) {
+  :root {
+    --line: rgba(255, 255, 255, 0.34);
+    --line-soft: rgba(255, 255, 255, 0.18);
+    --line-strong: rgba(255, 255, 255, 0.48);
+    --muted-3: #a9b3c0;
+    --dim: #9aa5b4;
+    --scrim: rgba(7, 9, 13, 0.94);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --line: rgba(255, 255, 255, 0.22);
+    --scrim: #07090d;
+  }
+
+  /* Translucent chrome becomes solid rather than frosted. */
+  .backdrop-blur-sm,
+  .backdrop-blur {
+    backdrop-filter: none;
   }
 }
 

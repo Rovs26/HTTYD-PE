@@ -34,6 +34,10 @@ export function Button({
     <button
       className={cn(
         "inline-flex items-center justify-center gap-3 rounded-[3px] transition",
+        // Feedback belongs on the press, not on the response. Hover does not exist on a
+        // phone, so without this a student taps and the interface does nothing at all until
+        // the network answers — long enough on classroom wifi to earn a second tap.
+        "active:scale-[0.97] active:brightness-110 motion-reduce:active:scale-100",
         // Anton for hero actions; mono, letterspaced and uppercase for everything else.
         isLarge
           ? "min-h-16 px-6 font-display text-[28px] uppercase leading-none tracking-[0.005em]"

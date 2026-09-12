@@ -15,7 +15,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { DragonMark } from "@/components/dragon-mark";
 import { PhaseBanner, PhoneStatusBar, type BannerTone } from "@/components/phone-shell";
-import { PhaseTimer } from "@/components/phase-timer";
+import { PhaseTimer, usePhaseCountdown } from "@/components/phase-timer";
 import { CoverageTags, PromptGuide, coveredDimensions } from "@/components/prompt-guide";
 import { Button } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/field";
@@ -101,6 +101,9 @@ export function StudentGame({ joinCode }: { joinCode: string }) {
   const nameFor = (playerId: string) =>
     state?.players.find((item) => item.id === playerId)?.name ?? "Trainer";
 
+  const secondsLeft = usePhaseCountdown(currentRound?.phase_ends_at ?? null);
+  const timeUp = secondsLeft === 0;
+
   const roundLabel = currentRound
     ? `Round ${currentRound.round_number} of ${TOTAL_ROUNDS}`
     : "Lobby";
@@ -124,19 +127,25 @@ export function StudentGame({ joinCode }: { joinCode: string }) {
           }
         : currentRound?.submission_open && !currentSubmission && isActive
           ? {
-              tone: "fire",
+              // Expiry used to be a colour change on a number in the status bar, with
+              // aria-live="off". A student mid-sentence got no warning and no signal. The
+              // banner is where they are already looking, and it announces for free.
+              tone: timeUp ? "gold" : "fire",
               icon: <Unlock className={BANNER_ICON} aria-hidden />,
-              text: "Write your prompt now"
+              text: timeUp ? "Time's up — lock your prompt" : "Write your prompt now"
             }
           : currentSubmission && !resultsVisible
             ? {
-                tone: "quiet",
-                icon: <Lock className={`${BANNER_ICON} text-sea`} aria-hidden />,
+                // `quiet` is bg-panel on bg-ground — a 1.09:1 surface difference, so the band
+                // stopped reading as a band in the two states students sit in longest. `sea`
+                // is calm rather than urgent, which suits waiting, but is unmistakably a band.
+                tone: "sea",
+                icon: <Lock className={BANNER_ICON} aria-hidden />,
                 text: "Prompt locked — drawing your dragon"
               }
             : {
-                tone: "quiet",
-                icon: <Sparkles className={`${BANNER_ICON} text-sea`} aria-hidden />,
+                tone: "sea",
+                icon: <Sparkles className={BANNER_ICON} aria-hidden />,
                 text: currentRound ? "Waiting for the host" : "Waiting to start"
               };
 
@@ -304,8 +313,13 @@ export function StudentGame({ joinCode }: { joinCode: string }) {
             ) : null}
 
             {/* ---------- eliminated ---------- */}
+            {/*
+             * Gold is reserved for rank and winner — see globals.css — so using it to tell a
+             * student they are out said "winner" in the design's own vocabulary. Neutral rule
+             * instead.
+             */}
             {isEliminated && !gameEnded ? (
-              <section className="border-l-[3px] border-l-gold bg-gold/[0.06] p-4">
+              <section className="order-[-2] border-l-[3px] border-l-line-strong bg-white/5 p-4">
                 <h2 className="title text-[26px]">
                   {hasCompeted ? "You did not advance" : "You joined mid-game"}
                 </h2>
@@ -313,7 +327,12 @@ export function StudentGame({ joinCode }: { joinCode: string }) {
                   {hasCompeted
                     ? `${myRanking ? `You finished ${ordinal(myRanking.rank)} in that round. ` : ""}You are spectating the rest of the game.`
                     : "This game was already under way, so you are watching this one from the stands."}
-                  {audienceVoting
+                  {/*
+                   * An audience ballot is only accepted from someone who competed in an
+                   * earlier round. Promising the vote on `audienceVoting` alone told a
+                   * mid-game joiner they could vote and then gave them no ballot at all.
+                   */}
+                  {audienceVoting && hasCompeted
                     ? " You can still vote — your ballot counts as an audience vote."
                     : ""}
                 </p>
@@ -328,10 +347,13 @@ export function StudentGame({ joinCode }: { joinCode: string }) {
               </h2>
               <div className="mt-4">
                 {currentRound?.challenge_image_url ? (
+                  // A full-width square ate most of a phone screen and pushed "Review and
+                  // lock" below the fold at 1051px on an 812px viewport. Capped against the
+                  // viewport so the target stays in view and the action stays reachable.
                   <img
                     src={currentRound.challenge_image_url}
                     alt="The dragon to beat"
-                    className="aspect-square w-full border border-line object-cover"
+                    className="mx-auto aspect-square max-h-[45vh] w-full border border-line object-contain sm:max-h-none sm:object-cover"
                   />
                 ) : (
                   <div className="relative aspect-square w-full overflow-hidden border border-line">
@@ -396,15 +418,22 @@ export function StudentGame({ joinCode }: { joinCode: string }) {
 
                 <PromptGuide prompt={prompt} />
 
-                <Button
-                  type="button"
-                  size="lg"
-                  className="w-full"
-                  disabled={prompt.trim().length < 8}
-                  onClick={() => setReviewing(true)}
-                >
-                  Review and lock
-                </Button>
+                {/*
+                 * Stuck to the bottom of the viewport. The scaffold and character counter push
+                 * this to ~1050px on an 812px screen, so the one action of the phase sat below
+                 * the fold — and behind the keyboard once the textarea had focus.
+                 */}
+                <div className="sticky bottom-0 z-20 -mx-4 border-t border-line bg-ground/95 px-4 py-3 backdrop-blur-sm">
+                  <Button
+                    type="button"
+                    size="lg"
+                    className="w-full"
+                    disabled={prompt.trim().length < 8}
+                    onClick={() => setReviewing(true)}
+                  >
+                    Review and lock
+                  </Button>
+                </div>
 
                 {/* A sheet, not an inline block: locking is irreversible and deserves a beat. */}
                 {reviewing ? (
@@ -500,14 +529,22 @@ export function StudentGame({ joinCode }: { joinCode: string }) {
                   <GenerationStatus
                     status={myImage.generation_status}
                     error={myImage.generation_error}
+                    drawn={state?.roundProgress.drawn ?? 0}
+                    total={state?.roundProgress.total ?? 0}
                   />
                 )}
               </section>
             ) : null}
 
             {/* ---------- voting ---------- */}
+            {/*
+             * Pulled to the top of the column while voting is open. The banner says "pick one"
+             * and the ballot used to sit ~1,650px down an 812px screen, behind the challenge
+             * image and the student's own locked prompt — content that mattered a phase ago.
+             * Ordering rather than re-nesting keeps the DOM, and so the reading order, intact.
+             */}
             {canVote ? (
-              <section>
+              <section className="order-[-1]">
                 <p className="text-[16px] leading-relaxed text-ink-soft">
                   {isEliminated
                     ? "Your audience vote counts. Pick the strongest dragon."
@@ -624,9 +661,12 @@ export function StudentGame({ joinCode }: { joinCode: string }) {
               </section>
             ) : null}
 
-            {!canVote && !resultsVisible && !gameEnded && completedImages.length === 0 ? (
+            {/* Only when the student has no generation status of their own on screen —
+                otherwise this rendered directly under it saying the same sentence twice, in
+                exactly the window where every phone in the room is showing this screen. */}
+            {!canVote && !resultsVisible && !gameEnded && !myImage && completedImages.length === 0 ? (
               <section className="border border-line bg-white/5 p-6 text-center">
-                <Crown className="mx-auto mb-3 h-9 w-9 text-gold" aria-hidden />
+                <Crown className="mx-auto mb-3 h-9 w-9 text-sea" aria-hidden />
                 <p className="title text-[22px]">Watch the host screen</p>
                 <p className="mt-2 text-[15px] text-ink-soft">
                   This updates on its own. Keep it open.
@@ -657,10 +697,15 @@ function ordinal(rank: number) {
 
 function GenerationStatus({
   status,
-  error
+  error,
+  drawn,
+  total
 }: {
   status: string;
   error: string | null;
+  /** Real progress. This is the state students sit in longest; it used to show none. */
+  drawn: number;
+  total: number;
 }) {
   const headline =
     status === "generating"
@@ -671,13 +716,15 @@ function GenerationStatus({
           ? "The host skipped this one"
           : "Your dragon could not be drawn";
 
+  const waiting = status === "generating" || status === "pending";
+
   return (
     <div
       role="status"
       aria-live="polite"
       className="mt-2 flex aspect-square w-full flex-col items-center justify-center gap-3 border border-dashed border-line-strong bg-panel px-6 text-center"
     >
-      {status === "generating" || status === "pending" ? (
+      {waiting ? (
         <div className="h-1 w-24 overflow-hidden bg-white/10">
           <div className="lane-sweep h-full w-1/3 bg-fire" />
         </div>
@@ -688,8 +735,15 @@ function GenerationStatus({
           ? (error ?? "Tell your host — they can retry it for you.")
           : status === "skipped"
             ? "You are still in the round; this image just was not used."
-            : "This updates on its own."}
+            : "Keep this open — it updates on its own."}
       </p>
+      {/* The host has these numbers in the generation log; the student had a sentence. Under
+          reduced motion, where the sweep above is stilled, this is the only live signal. */}
+      {waiting && total > 0 ? (
+        <p className="numeric text-[13px] font-bold uppercase tracking-[0.14em] text-sea">
+          {drawn} of {total} drawn
+        </p>
+      ) : null}
     </div>
   );
 }

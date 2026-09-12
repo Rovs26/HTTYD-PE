@@ -157,6 +157,17 @@ export function buildGameStateView(input: {
   const currentRound =
     input.rounds.find((round) => round.round_number === input.session.current_round) ?? null;
 
+  // Aggregate, and deliberately anonymous: how many of this round's images are drawn. A
+  // student receives only their own image, so without this they cannot tell a long wait from
+  // a stuck one — which is the state they spend most of a lesson in.
+  const roundImagesAll = input.generatedImages.filter(
+    (image) => image.round_id === currentRound?.id
+  );
+  const roundProgress = {
+    drawn: roundImagesAll.filter((image) => image.generation_status === "complete").length,
+    total: roundImagesAll.length
+  };
+
   if (input.isHost) {
     return {
       session: input.session,
@@ -172,7 +183,8 @@ export function buildGameStateView(input: {
       currentPlayer: input.currentPlayer
         ? toGamePlayer(input.currentPlayer, { includeRank: true })
         : null,
-      isHost: true
+      isHost: true,
+      roundProgress
     };
   }
 
@@ -285,6 +297,7 @@ export function buildGameStateView(input: {
     currentPlayer: input.currentPlayer
       ? toGamePlayer(input.currentPlayer, { includeRank: resultsVisible })
       : null,
-    isHost: false
+    isHost: false,
+    roundProgress
   };
 }
