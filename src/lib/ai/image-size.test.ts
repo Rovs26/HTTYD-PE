@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_FLEXIBLE_SIZE,
-  DEFAULT_NAMED_SIZE,
+  DEFAULT_SIZE,
   isValidImageSize,
   modelSupportsArbitrarySize,
   resolveImageSize
@@ -56,9 +55,10 @@ describe("image size", () => {
     }
   });
 
-  it("defaults to the small size on a model that supports it", () => {
-    expect(resolveImageSize("gpt-image-2", undefined)).toBe(DEFAULT_FLEXIBLE_SIZE);
-    expect(resolveImageSize("gpt-image-1", undefined)).toBe(DEFAULT_NAMED_SIZE);
+  it("defaults to 1024x1024 on every model", () => {
+    expect(DEFAULT_SIZE).toBe("1024x1024");
+    expect(resolveImageSize("gpt-image-2", undefined)).toBe(DEFAULT_SIZE);
+    expect(resolveImageSize("gpt-image-1", undefined)).toBe(DEFAULT_SIZE);
   });
 
   it("honours a valid configured size", () => {
@@ -68,8 +68,13 @@ describe("image size", () => {
 
   // A typo in an env var must not take the game down in front of a class.
   it("falls back instead of passing an unusable size to the API", () => {
-    expect(resolveImageSize("gpt-image-2", "700x700")).toBe(DEFAULT_FLEXIBLE_SIZE);
-    expect(resolveImageSize("gpt-image-2", "720x720")).toBe(DEFAULT_FLEXIBLE_SIZE);
-    expect(resolveImageSize("gpt-image-1", "832x832")).toBe(DEFAULT_NAMED_SIZE);
+    expect(resolveImageSize("gpt-image-2", "700x700")).toBe(DEFAULT_SIZE);
+    expect(resolveImageSize("gpt-image-2", "720x720")).toBe(DEFAULT_SIZE);
+    expect(resolveImageSize("gpt-image-1", "832x832")).toBe(DEFAULT_SIZE);
+  });
+
+  // Smaller is not the default, but it stays available to anyone who deliberately sets it.
+  it("still honours a deliberately configured smaller size on a model that supports it", () => {
+    expect(resolveImageSize("gpt-image-2", "832x832")).toBe("832x832");
   });
 });
