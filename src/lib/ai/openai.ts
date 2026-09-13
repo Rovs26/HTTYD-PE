@@ -18,6 +18,19 @@ function requestTimeoutMs() {
   return Number.isFinite(value) && value > 0 ? value : 120_000;
 }
 
+/**
+ * Scoring gets its own, tighter budget than image generation.
+ *
+ * A QA run saw one scoring call sit for 15 minutes. On Vercel the 300s function limit would
+ * have killed it anyway, so the only thing the extra wait bought was a host staring at a
+ * frozen dashboard. One retry at 60s bounds the worst case at roughly two minutes, after
+ * which the attempt is spent and the round can still close.
+ */
+function scoringTimeoutMs() {
+  const value = Number(process.env.OPENAI_SCORING_TIMEOUT_MS);
+  return Number.isFinite(value) && value > 0 ? value : 60_000;
+}
+
 function getOpenAI() {
   if (!process.env.OPENAI_API_KEY) {
     return null;
@@ -106,17 +119,19 @@ export function cappedImageQuality(
   return quality === "low" ? "low" : "medium";
 }
 
+// Medium is the default for real classes: "low" was visibly rough on a projector, and
+// medium is still the ceiling — high/auto/hd are capped down to it.
 function challengeImageQuality() {
   return cappedImageQuality(
     process.env.OPENAI_CHALLENGE_IMAGE_QUALITY ?? process.env.OPENAI_IMAGE_QUALITY,
-    "low"
+    "medium"
   );
 }
 
 function studentImageQuality() {
   return cappedImageQuality(
     process.env.OPENAI_STUDENT_IMAGE_QUALITY ?? process.env.OPENAI_IMAGE_QUALITY,
-    "low"
+    "medium"
   );
 }
 
@@ -489,6 +504,9 @@ export async function scoreImageSimilarity(input: {
   generatedImageUrl: string;
   prompt: string;
   practiceMode?: boolean;
+  /** Log context only — which student's image, in which round, took how long. */
+  playerName?: string;
+  roundNumber?: number;
 }) {
   if (input.practiceMode || shouldUseMockAi()) {
     return mockScoreSimilarity(input.prompt);
@@ -499,6 +517,7 @@ export async function scoreImageSimilarity(input: {
     return mockScoreSimilarity(input.prompt);
   }
 
+  const startedAt = Date.now();
   const response = await client.responses.create({
     model: evalModel(),
     input: [
@@ -547,6 +566,15 @@ export async function scoreImageSimilarity(input: {
         }
       }
     }
+  }, { timeout: scoringTimeoutMs(), maxRetries: 1 });
+
+  // Image generation logged its duration and scoring did not — which is exactly where the
+  // long stall happened, and where the host had least visibility into it.
+  log.info("Image scored", {
+    roundNumber: input.roundNumber ?? null,
+    playerName: input.playerName ?? null,
+    ms: Date.now() - startedAt,
+    model: evalModel()
   });
 
   // The model can refuse, or return a truncated body. An unguarded parse here turns one

@@ -446,3 +446,87 @@ describe("buildGameStateView — round progress", () => {
     expect(Object.keys(view.roundProgress).sort()).toEqual(["drawn", "total"]);
   });
 });
+
+describe("buildGameStateView — the reveal survives the host advancing", () => {
+  // Round 1 is finished and scored; the class has moved on to round 2, still being written.
+  const finishedRound: Round = { ...round("scored", false), id: "round-1", round_number: 1 };
+  const liveRound: Round = {
+    ...round("submissions", false),
+    id: "round-2",
+    round_number: 2,
+    submission_open: true
+  };
+  const liveSession: GameSession = { ...session, current_round: 2 };
+
+  const round2Submission = (playerId: string): PromptSubmission => ({
+    ...submission(playerId),
+    id: `sub2-${playerId}`,
+    round_id: "round-2"
+  });
+  const round2Image = (playerId: string): GeneratedImage => ({
+    ...generatedImage(playerId),
+    id: `img2-${playerId}`,
+    round_id: "round-2"
+  });
+
+  const view = buildGameStateView({
+    session: liveSession,
+    players,
+    rounds: [finishedRound, liveRound],
+    submissions: [...submissions, round2Submission("a"), round2Submission("b")],
+    generatedImages: [...generatedImages, round2Image("a"), round2Image("b")],
+    votes,
+    rankings,
+    currentPlayer: players[0],
+    isHost: false
+  });
+
+  it("still shows a rival's prompt from the finished round", () => {
+    const rivalRound1 = view.submissions.find(
+      (item) => item.player_id === "b" && item.round_id === "round-1"
+    );
+    expect(rivalRound1).toBeDefined();
+  });
+
+  it("still withholds a rival's prompt for the round being written", () => {
+    const rivalRound2 = view.submissions.find(
+      (item) => item.player_id === "b" && item.round_id === "round-2"
+    );
+    expect(rivalRound2).toBeUndefined();
+  });
+
+  it("keeps the finished round's leaderboard readable", () => {
+    const round1 = view.rankings.filter((item) => item.round_id === "round-1");
+    expect(round1).toHaveLength(2);
+  });
+
+  it("keeps the finished round's dragons visible beside the prompts", () => {
+    const rivalImage = view.generatedImages.find(
+      (item) => item.player_id === "b" && item.round_id === "round-1"
+    );
+    expect(rivalImage).toBeDefined();
+    expect(rivalImage?.ai_similarity_score).not.toBeNull();
+  });
+
+  it("does not reveal the in-progress round's dragons", () => {
+    const rivalLive = view.generatedImages.find(
+      (item) => item.player_id === "b" && item.round_id === "round-2"
+    );
+    expect(rivalLive).toBeUndefined();
+  });
+
+  it("reveals nothing at all when the host turned reveal off", () => {
+    const noReveal = buildGameStateView({
+      session: { ...liveSession, reveal_prompts: false },
+      players,
+      rounds: [finishedRound, liveRound],
+      submissions: [...submissions, round2Submission("a"), round2Submission("b")],
+      generatedImages: [...generatedImages, round2Image("a"), round2Image("b")],
+      votes,
+      rankings,
+      currentPlayer: players[0],
+      isHost: false
+    });
+    expect(noReveal.submissions.every((item) => item.player_id === "a")).toBe(true);
+  });
+});

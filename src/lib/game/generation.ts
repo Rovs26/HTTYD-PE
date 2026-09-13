@@ -135,6 +135,13 @@ export async function generateNextImage(joinCode: string, input: z.infer<typeof 
     throw new AppError("Start the game before generating images.", 409);
   }
 
+  // The dashboard gates this, but the API did not: a stale host tab or a double click could
+  // start draining the queue while the class was still writing, and anyone who locked their
+  // prompt after that drained got no image at all.
+  if (round.submission_open) {
+    throw new AppError("Close prompt submissions before drawing the dragons.", 409);
+  }
+
   await ensurePendingImages(session, round);
   await assertImageBudgetRemaining(session.id);
 
@@ -369,6 +376,13 @@ export async function scoreNextImage(joinCode: string, input: z.infer<typeof hos
     .update({ scoring_attempts: Number(image.scoring_attempts ?? 0) + 1 })
     .eq("id", image.id);
 
+  // Log context only, so a slow score names the student the host should look at.
+  const { data: scoredPlayer } = await supabase
+    .from("players")
+    .select("name")
+    .eq("id", image.player_id)
+    .single();
+
   try {
     if (!image.image_url) {
       throw new Error("Generated image is missing a URL.");
@@ -382,7 +396,9 @@ export async function scoreNextImage(joinCode: string, input: z.infer<typeof hos
       challengeImageUrl: round.challenge_image_url,
       generatedImageUrl: image.image_url,
       prompt,
-      practiceMode: session.practice_mode
+      practiceMode: session.practice_mode,
+      playerName: scoredPlayer?.name ?? undefined,
+      roundNumber: round.round_number
     });
 
     const { data: updated, error: updateError } = await supabase

@@ -221,17 +221,33 @@ export function buildGameStateView(input: {
     maskNames && currentRound && id !== playerId ? ballotIdFor(currentRound.id, id) : id;
   const nameFor = (player: Player) => labels?.get(player.id);
 
-  // The prompts are the lesson. Once the round is scored, everyone can read what the other
-  // trainers actually wrote — but never before the vote is in.
-  const promptsRevealed = Boolean(
-    input.session.reveal_prompts && (resultsVisible || gameEnded)
+  /**
+   * The prompts are the lesson, so they stay readable.
+   *
+   * Reveal used to cover only the current round, and only between scoring and the host
+   * advancing — so round 1's prompts vanished from the app the moment round 2 began, and a
+   * student could never look back at the thing the game is meant to teach. Any round that
+   * has been scored or completed is revealed and stays revealed; the round in progress is
+   * still withheld until its own results are in, so nobody can read rivals' prompts while
+   * the vote is live.
+   */
+  const revealedRoundIds = new Set(
+    input.rounds
+      .filter((round) => {
+        if (round.id === currentRoundId) {
+          return resultsVisible || gameEnded;
+        }
+        return round.status === "scored" || round.status === "complete";
+      })
+      .map((round) => round.id)
   );
+  const promptsRevealed = Boolean(input.session.reveal_prompts);
 
   const visibleSubmissions = input.submissions.filter((submission) => {
     if (submission.player_id === playerId) {
       return true;
     }
-    return promptsRevealed && submission.round_id === currentRoundId;
+    return promptsRevealed && revealedRoundIds.has(submission.round_id);
   });
 
   return {
@@ -257,16 +273,24 @@ export function buildGameStateView(input: {
         if (image.player_id === playerId) {
           return true;
         }
-        return (
-          image.round_id === currentRoundId &&
-          galleryVisible &&
-          image.generation_status === "complete"
-        );
+        if (image.generation_status !== "complete") {
+          return false;
+        }
+        // The current round opens up when voting does; finished rounds stay open, so the
+        // reveal still has dragons to put next to the prompts after the host moves on.
+        if (image.round_id === currentRoundId) {
+          return galleryVisible;
+        }
+        return revealedRoundIds.has(image.round_id);
       })
       .map((image) => ({
         ...toGameImage(image, {
-          // Everyone's score is public once the round is scored; before that, only your own.
-          includeEvaluation: resultsVisible || image.player_id === playerId
+          // Everyone's score is public once that round is scored; before that, only your own.
+          includeEvaluation:
+            image.player_id === playerId ||
+            (image.round_id === currentRoundId
+              ? resultsVisible
+              : revealedRoundIds.has(image.round_id))
         }),
         player_id: idFor(image.player_id)
       })),
@@ -288,10 +312,19 @@ export function buildGameStateView(input: {
       ...(resultsVisible
         ? input.rankings.filter((ranking) => ranking.round_id === currentRoundId)
         : []),
+      // ...the full standing of every round already finished, so the reveal can still be
+      // read after the host advances...
+      ...input.rankings.filter(
+        (ranking) =>
+          ranking.round_id !== currentRoundId && revealedRoundIds.has(ranking.round_id)
+      ),
       // ...plus your own placings from earlier rounds, so "you did not advance" can say
       // where you actually finished.
       ...input.rankings.filter(
-        (ranking) => ranking.player_id === playerId && ranking.round_id !== currentRoundId
+        (ranking) =>
+          ranking.player_id === playerId &&
+          ranking.round_id !== currentRoundId &&
+          !revealedRoundIds.has(ranking.round_id)
       )
     ].map(toGameRanking),
     currentPlayer: input.currentPlayer
