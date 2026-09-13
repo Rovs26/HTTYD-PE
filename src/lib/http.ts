@@ -15,6 +15,46 @@ export class AppError extends Error {
   }
 }
 
+/**
+ * A student-facing sentence for a validation failure.
+ *
+ * Zod's defaults are written for developers — a teenager who typed three words got back
+ * "String must contain at least 8 character(s)". These are the fields a student or host can
+ * actually put text into, so each gets wording that says what to do next. Anything else
+ * falls back to a plain sentence rather than leaking the raw rule.
+ */
+export function friendlyValidationMessage(error: ZodError): string {
+  const issue = error.issues[0];
+  if (!issue) {
+    return "Something in that request was not valid. Check it and try again.";
+  }
+
+  const field = issue.path[0];
+
+  if (field === "prompt") {
+    return issue.code === "too_big"
+      ? "That prompt is too long. Keep it under 4000 characters."
+      : "Write a bit more before locking it in — at least 8 characters.";
+  }
+  if (field === "name") {
+    return "Enter a name — up to 80 characters.";
+  }
+  if (field === "pin") {
+    return "The host PIN needs to be between 4 and 32 characters.";
+  }
+  if (field === "votedForPlayerId") {
+    return "Pick a dragon to vote for.";
+  }
+  if (field === "playerToken" || field === "hostToken") {
+    return "This device is not signed in to the game any more. Rejoin with the game code.";
+  }
+  if (field === "additionalInstruction") {
+    return "That instruction is too long. Keep it under 1000 characters.";
+  }
+
+  return "Something in that request was not valid. Check it and try again.";
+}
+
 export type ApiErrorBody = {
   error: string;
   code: string;
@@ -38,7 +78,12 @@ export function fail(error: unknown) {
 
   if (error instanceof ZodError) {
     return NextResponse.json<ApiErrorBody>(
-      { error: "Invalid request", code: "invalid_request", details: error.flatten() },
+      {
+        error: friendlyValidationMessage(error),
+        code: "invalid_request",
+        // The raw rules stay available for debugging; they are just no longer the message.
+        details: error.flatten()
+      },
       { status: 422 }
     );
   }
